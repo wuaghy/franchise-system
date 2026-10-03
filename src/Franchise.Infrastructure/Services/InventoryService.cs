@@ -95,27 +95,48 @@ public class InventoryService : IInventoryService
 
         try
         {
-            // Giai đoạn 4.1: Kiểm tra tồn kho toàn diện (Fail-Fast Guard Clause)
+            // Giai đoạn 4.1: Khóa dòng cấp cơ sở dữ liệu (Pessimistic Row Lock: SELECT ... FOR UPDATE)
+            List<StoreInventory> lockedRows;
+            if (_context.Database.IsRelational())
+            {
+                var ids = sortedIngredientIds.ToArray();
+                lockedRows = await _context.StoreInventories
+                    .FromSqlInterpolated($@"
+                        SELECT * FROM ""StoreInventories""
+                        WHERE ""StoreId"" = {request.StoreId}
+                          AND ""IngredientId"" = ANY({ids})
+                        ORDER BY ""IngredientId""
+                        FOR UPDATE")
+                    .Include(si => si.Ingredient)
+                    .ToListAsync(ct);
+            }
+            else
+            {
+                // Fallback cho môi trường Unit Test (EF Core InMemory)
+                lockedRows = await _context.StoreInventories
+                    .Where(si => si.StoreId == request.StoreId && sortedIngredientIds.Contains(si.IngredientId))
+                    .Include(si => si.Ingredient)
+                    .OrderBy(si => si.IngredientId)
+                    .ToListAsync(ct);
+            }
+
+            var byIngredient = lockedRows.ToDictionary(r => r.IngredientId);
             var inventoriesToDeduct = new List<(StoreInventory Inventory, decimal QuantityToDeduct, string IngredientName)>();
 
             foreach (var ingredientId in sortedIngredientIds)
             {
                 var demand = totalDemand[ingredientId];
 
-                var inventory = await _context.StoreInventories
-                    .Include(si => si.Ingredient)
-                    .FirstOrDefaultAsync(si => si.StoreId == request.StoreId && si.IngredientId == ingredientId, ct);
-
-                var ingredientDisplayName = inventory?.Ingredient?.Name ?? demand.Name;
-
-                if (inventory == null || inventory.CurrentStock < demand.Quantity)
+                if (!byIngredient.TryGetValue(ingredientId, out var inventory) || inventory.CurrentStock < demand.Quantity)
                 {
                     var available = inventory?.CurrentStock ?? 0;
+                    var ingredientDisplayName = inventory?.Ingredient?.Name ?? demand.Name;
                     throw new InvalidOperationException(
                         $"Hết hàng! Chi nhánh không đủ nguyên liệu '{ingredientDisplayName}'. Cần: {demand.Quantity}, Tồn kho hiện có: {available}.");
                 }
 
-                inventoriesToDeduct.Add((inventory, demand.Quantity, ingredientDisplayName));
+                var displayName = inventory.Ingredient?.Name ?? demand.Name;
+                inventoriesToDeduct.Add((inventory, demand.Quantity, displayName));
             }
 
             // Giai đoạn 4.2: Áp dụng trừ kho nguyên tử & ghi sổ cái bất biến (Ledger Audit)
