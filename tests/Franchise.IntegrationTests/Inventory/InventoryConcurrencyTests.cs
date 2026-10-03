@@ -71,9 +71,17 @@ public class InventoryConcurrencyTests : IAsyncLifetime
             };
             migrateContext.Ingredients.Add(pearlIngredient);
 
+            // 1. Thêm Danh mục sản phẩm hợp lệ để thỏa mãn khóa ngoại FK_Products_Categories_CategoryId
+            var category = new Category
+            {
+                Name = "Trà sữa",
+                DisplayOrder = 1
+            };
+            migrateContext.Categories.Add(category);
+
             var milkTeaProduct = new Product
             {
-                CategoryId = Guid.NewGuid(),
+                CategoryId = category.Id, // Dùng ID của category vừa tạo
                 Sku = "MT-01",
                 Name = "Trà sữa truyền thống",
                 BasePrice = 35000
