@@ -1,17 +1,20 @@
 name: CD K3s Deploy
 on:
-    workflow_run:
-        workflows: ["CD Docker Publish"]
-        types:
-            - completed
-        branches:
-            - main
-    workflow_dispatch:
-        inputs:
-            image_tag:
-                description: 'Image tag needed to deploy (ex: latest or short SHA)'
-                required: true
-                default: 'latest'
+  # Tạm thời tắt auto-trigger từ cloud runner vì K3s đang ở localhost:
+  # workflow_run:
+  #   workflows: ["CD Docker Publish"]
+  #   types:
+  #     - completed
+  #   branches:
+  #     - main
+
+  # Giữ lại trigger chạy bằng tay khi cần:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag needed to deploy (ex: latest or short SHA)'
+        required: true
+        default: 'latest'
 jobs:
     deploy:
         name: Deploy to K3s Cluster
