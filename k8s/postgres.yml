@@ -1,0 +1,79 @@
+# 1. BẢO MẬT: Lưu trữ thông tin tài khoản DB
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+stringData:
+  POSTGRES_DB: franchisedb
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: FranchiseStrongPassword123!
+
+---
+# 2. Ổ ĐĨA: Cấp phát 1GB dung lượng lưu trữ bền vững
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# 3. TIẾN TRÌNH: Khởi chạy PostgreSQL Container
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: franchise-postgres
+  labels:
+    app: franchise-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: franchise-postgres
+  template:
+    metadata:
+      labels:
+        app: franchise-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+# 4. MẠNG NỘI BỘ: Service cho Backend kết nối
+apiVersion: v1
+kind: Service
+metadata:
+  name: franchise-db-service
+spec:
+  type: ClusterIP
+  selector:
+    app: franchise-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

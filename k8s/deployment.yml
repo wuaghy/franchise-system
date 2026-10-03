@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: franchise-backend
+  labels:
+    app: franchise-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: franchise-backend
+  template:
+    metadata:
+      labels:
+        app: franchise-backend
+    spec:
+      containers:
+        - name: franchise-backend
+          image: franchise-backend:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ConnectionStrings__DefaultConnection
+              value: "Host=franchise-db-service;Port=5432;Database=franchisedb;Username=postgres;Password=FranchiseStrongPassword123!"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"

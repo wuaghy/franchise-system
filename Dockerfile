@@ -1,0 +1,28 @@
+# build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# 1.1 Copy các file .csproj để restore trước (Tận dụng Docker Cache Layer)
+COPY src/Franchise.Domain/*.csproj ./src/Franchise.Domain/
+COPY src/Franchise.Application/*.csproj ./src/Franchise.Application/
+COPY src/Franchise.Infrastructure/*.csproj ./src/Franchise.Infrastructure/
+COPY src/Franchise.Api/*.csproj ./src/Franchise.Api/
+
+RUN dotnet restore ./src/Franchise.Api/Franchise.Api.csproj
+
+# 1.2 Copy toàn bộ source code còn lại và biên dịch
+COPY src/ ./src/
+WORKDIR /src/src/Franchise.Api
+RUN dotnet publish -c Release -o /app/publish --no-restore
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+WORKDIR /app
+
+EXPOSE 8080
+ENV ASPNETCORE_HTTP_PORTS=8080
+ENV ASPNETCORE_ENVIRONMENT=Development
+
+COPY --from=build /app/publish .
+
+ENTRYPOINT ["dotnet", "Franchise.Api.dll"]

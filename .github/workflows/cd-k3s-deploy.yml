@@ -1,0 +1,80 @@
+name: CD K3s Deploy
+on:
+    workflow_run:
+        workflows: ["CD Docker Publish"]
+        types:
+            - completed
+        branches:
+            - main
+    workflow_dispatch:
+        inputs:
+            image_tag:
+                description: 'Image tag needed to deploy (ex: latest or short SHA)'
+                required: true
+                default: 'latest'
+jobs:
+    deploy:
+        name: Deploy to K3s Cluster
+        runs-on: ubuntu-latest
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+        steps:
+            # Bước 1: Kéo code về (để lấy các file manifest YAML trong repo nếu có)
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            # Bước 2: Cài đặt công cụ kubectl lên runner
+            - name: Set up Kubectl
+              uses: azure/setup-kubectl@v3
+              with:
+                version: "v1.29.0"
+
+            # Bước 3: Cấu hình Kubeconfig từ Secret để kết nối tới K3s
+            - name: Configure Kubeconfig
+              run: |
+                mkdir -p $HOME/.kube
+                echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+                chmod 600 $HOME/.kube/config
+
+            # Bước 4: Kiểm tra kết nối tới cụm K3s
+            - name: Verify cluster connection
+              run: |
+                echo "Kiểm tra kết nối tới K3s..."
+                kubectl cluster-info
+                kubectl get nodes -o wide
+
+            # Bước 5: Xác định Image Tag cần triển khai
+            - name: Determine Image Tag
+              id: vars
+              run: |
+                if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                  echo "TAG=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+                else
+                  # Lấy 7 ký tự đầu của Git Commit đã kích hoạt workflow Docker trước đó
+                  SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+                  echo "TAG=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+                fi
+
+            # Bước 6: Apply các file Manifests (nếu có thư mục k8s)
+            - name: Apply Kubernetes Manifests
+              run: |
+                if [ -d "k8s" ]; then
+                  echo "Đang apply manifests trong thư mục k8s/..."
+                  kubectl apply -f k8s/
+                else
+                  echo "Chưa có thư mục k8s/, bỏ qua bước apply file."
+                fi
+
+            # Bước 7: Cập nhật Image mới và Rolling Update
+            - name: Rolling update backend deployment
+              run: |
+                IMAGE_PATH="ghcr.io/${{ github.repository }}-backend:${{ steps.vars.outputs.TAG }}"
+                echo "Deploying image: $IMAGE_PATH"
+                
+                # Kiểm tra nếu deployment đã tồn tại trên K3s thì cập nhật image:
+                if kubectl get deployment franchise-backend > /dev/null 2>&1; then
+                  kubectl set image deployment/franchise-backend franchise-backend=$IMAGE_PATH
+                  echo "Đang chờ Pod mới khởi động hoàn tất..."
+                  kubectl rollout status deployment/franchise-backend --timeout=180s
+                else
+                  echo "Chưa tìm thấy deployment 'franchise-backend' trên K3s. Hãy apply manifest lần đầu."
+                fi

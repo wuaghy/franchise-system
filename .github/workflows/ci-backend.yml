@@ -1,0 +1,55 @@
+name: CI Backend
+
+on:
+  push:
+    branches: ["main", "develop"]
+    paths:
+      - "**.cs"
+      - "**.csproj"
+      - "**.sln*"
+      - ".github/workflows/ci-backend.yml"
+      - "**/appsettings*.json"
+
+  pull_request:
+    branches: ["main", "develop"]
+    paths:
+      - "**.cs"
+      - "**.csproj"
+      - "**.sln*"
+      - ".github/workflows/ci-backend.yml"
+      - "**/appsettings*.json"
+
+  workflow_dispatch:
+
+env: 
+  DOTNET_VERSION: "8.0.x"
+  BuildConfiguration: "Release"
+  
+jobs:
+  build-and-test:
+    name: Build and Test Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      # bước 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      # bước 2: Setup .NET SDK
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+      
+      # bước 3: Restore dependencies
+      - name: Restore dependencies
+        run: dotnet restore
+        
+      # bước 4: Build the backend project
+      - name: Build backend
+        run: dotnet build --configuration ${{ env.BuildConfiguration }} --no-restore
+
+      # bước 5: Run tests
+      - name: Run automated tests
+        run: dotnet test --configuration ${{ env.BuildConfiguration }} --no-build --verbosity normal
