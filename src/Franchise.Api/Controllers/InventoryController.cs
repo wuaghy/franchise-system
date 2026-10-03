@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Inventory;
+using Franchise.Domain.Exceptions;
 
 namespace Franchise.Api.Controllers;
 
@@ -43,11 +44,12 @@ public class InventoryController : ControllerBase
     /// </summary>
     [HttpPost("inbound")]
     [ProducesResponseType(typeof(StoreInventoryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> InboundStock(Guid storeId, [FromBody] InboundStockRequest request)
     {
         if (storeId != request.StoreId)
         {
-            return BadRequest("StoreId trong URL và Body không trùng khớp.");
+            throw new RequestValidationException("storeId", "StoreId trong URL và Body không trùng khớp.");
         }
 
         var result = await _inventoryService.InboundStockAsync(request);
@@ -60,11 +62,12 @@ public class InventoryController : ControllerBase
     [HttpPost("deduct")]
     [ProducesResponseType(typeof(InventoryDeductionResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DeductOrderStock(Guid storeId, [FromBody] CheckoutOrderInventoryRequest request)
     {
         if (storeId != request.StoreId)
         {
-            return BadRequest("StoreId trong URL và Body không trùng khớp.");
+            throw new RequestValidationException("storeId", "StoreId trong URL và Body không trùng khớp.");
         }
 
         var result = await _inventoryService.ProcessOrderInventoryDeductionAsync(request);

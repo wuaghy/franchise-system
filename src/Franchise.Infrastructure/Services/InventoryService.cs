@@ -2,6 +2,7 @@ using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Inventory;
 using Franchise.Domain.Entities;
 using Franchise.Domain.Enums;
+using Franchise.Domain.Exceptions;
 using Franchise.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -131,8 +132,7 @@ public class InventoryService : IInventoryService
                 {
                     var available = inventory?.CurrentStock ?? 0;
                     var ingredientDisplayName = inventory?.Ingredient?.Name ?? demand.Name;
-                    throw new InvalidOperationException(
-                        $"Hết hàng! Chi nhánh không đủ nguyên liệu '{ingredientDisplayName}'. Cần: {demand.Quantity}, Tồn kho hiện có: {available}.");
+                    throw new InsufficientStockException(ingredientId, ingredientDisplayName, demand.Quantity, available);
                 }
 
                 var displayName = inventory.Ingredient?.Name ?? demand.Name;
@@ -172,7 +172,7 @@ public class InventoryService : IInventoryService
 
             return new InventoryDeductionResult(true, request.OrderCode, deductedList);
         }
-        catch (Exception ex)
+        catch (InsufficientStockException ex)
         {
             if (dbTransaction != null)
             {
@@ -240,14 +240,11 @@ public class InventoryService : IInventoryService
     {
         if (request.Quantity <= 0)
         {
-            throw new ArgumentException("Số lượng nhập kho phải lớn hơn 0.");
+            throw new RequestValidationException(nameof(request.Quantity), "Số lượng nhập kho phải lớn hơn 0.");
         }
 
-        var ingredient = await _context.Ingredients.FirstOrDefaultAsync(i => i.Id == request.IngredientId, ct);
-        if (ingredient == null)
-        {
-            throw new InvalidOperationException($"Không tìm thấy nguyên liệu có ID '{request.IngredientId}'.");
-        }
+        var ingredient = await _context.Ingredients.FirstOrDefaultAsync(i => i.Id == request.IngredientId, ct)
+            ?? throw new NotFoundException("INGREDIENT_NOT_FOUND", $"Không tìm thấy nguyên liệu có ID '{request.IngredientId}'.");
 
         var inventory = await _context.StoreInventories
             .FirstOrDefaultAsync(si => si.StoreId == request.StoreId && si.IngredientId == request.IngredientId, ct);
