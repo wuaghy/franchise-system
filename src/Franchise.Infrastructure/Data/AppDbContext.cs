@@ -246,11 +246,17 @@ public class AppDbContext : DbContext
             b.HasKey(e => e.Id);
             b.Property(e => e.Name).IsRequired().HasMaxLength(100);
             b.Property(e => e.ExtraPrice).HasPrecision(18, 2);
+            b.Property(e => e.ConsumptionQuantity).HasPrecision(12, 4);
 
             b.HasOne(e => e.OrderItem)
                 .WithMany(oi => oi.Modifiers)
                 .HasForeignKey(e => e.OrderItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.Ingredient)
+                .WithMany()
+                .HasForeignKey(e => e.IngredientId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Payment>(b =>
