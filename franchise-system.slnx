@@ -5,4 +5,7 @@
     <Project Path="src/Franchise.Domain/Franchise.Domain.csproj" />
     <Project Path="src/Franchise.Infrastructure/Franchise.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Franchise.UnitTests/Franchise.UnitTests.csproj" />
+  </Folder>
 </Solution>
