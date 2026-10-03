@@ -33,3 +33,35 @@ public record DeductedIngredientDetail(
     decimal QuantityDeducted,
     decimal BalanceAfter
 );
+
+// Tồn kho chi nhánh
+public record StoreInventoryResponse(
+    Guid StoreId,
+    Guid IngredientId,
+    string IngredientCode,
+    string IngredientName,
+    string Unit,
+    decimal CurrentStock,
+    decimal MinAlertThreshold,
+    DateTime? LastCountedAt
+);
+
+// Cảnh báo hết hàng
+public record LowStockAlertResponse(
+    Guid StoreId,
+    Guid IngredientId,
+    string IngredientCode,
+    string IngredientName,
+    string Unit,
+    decimal CurrentStock,
+    decimal MinAlertThreshold,
+    decimal Shortage
+);
+
+// Nhập kho
+public record InboundStockRequest(
+    Guid StoreId,
+    Guid IngredientId,
+    decimal Quantity,
+    string? Note = null
+);

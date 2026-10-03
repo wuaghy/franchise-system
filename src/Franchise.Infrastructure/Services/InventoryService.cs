@@ -168,4 +168,109 @@ public class InventoryService : IInventoryService
             }
         }
     }
+
+    public async Task<List<StoreInventoryResponse>> GetStoreInventoryAsync(
+        Guid storeId, 
+        CancellationToken ct = default)
+    {
+        return await _context.StoreInventories
+            .AsNoTracking()
+            .Where(si => si.StoreId == storeId)
+            .Include(si => si.Ingredient)
+            .OrderBy(si => si.Ingredient!.Name)
+            .Select(si => new StoreInventoryResponse(
+                si.StoreId,
+                si.IngredientId,
+                si.Ingredient != null ? si.Ingredient.Code : string.Empty,
+                si.Ingredient != null ? si.Ingredient.Name : string.Empty,
+                si.Ingredient != null ? si.Ingredient.Unit : string.Empty,
+                si.CurrentStock,
+                si.MinAlertThreshold,
+                si.LastCountedAt
+            ))
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<LowStockAlertResponse>> GetLowStockAlertsAsync(
+        Guid storeId, 
+        CancellationToken ct = default)
+    {
+        return await _context.StoreInventories
+            .AsNoTracking()
+            .Where(si => si.StoreId == storeId && si.CurrentStock <= si.MinAlertThreshold)
+            .Include(si => si.Ingredient)
+            .OrderBy(si => si.CurrentStock)
+            .Select(si => new LowStockAlertResponse(
+                si.StoreId,
+                si.IngredientId,
+                si.Ingredient != null ? si.Ingredient.Code : string.Empty,
+                si.Ingredient != null ? si.Ingredient.Name : string.Empty,
+                si.Ingredient != null ? si.Ingredient.Unit : string.Empty,
+                si.CurrentStock,
+                si.MinAlertThreshold,
+                si.MinAlertThreshold - si.CurrentStock
+            ))
+            .ToListAsync(ct);
+    }
+
+    public async Task<StoreInventoryResponse> InboundStockAsync(
+        InboundStockRequest request, 
+        CancellationToken ct = default)
+    {
+        if (request.Quantity <= 0)
+        {
+            throw new ArgumentException("Số lượng nhập kho phải lớn hơn 0.");
+        }
+
+        var ingredient = await _context.Ingredients.FirstOrDefaultAsync(i => i.Id == request.IngredientId, ct);
+        if (ingredient == null)
+        {
+            throw new InvalidOperationException($"Không tìm thấy nguyên liệu có ID '{request.IngredientId}'.");
+        }
+
+        var inventory = await _context.StoreInventories
+            .FirstOrDefaultAsync(si => si.StoreId == request.StoreId && si.IngredientId == request.IngredientId, ct);
+
+        if (inventory == null)
+        {
+            inventory = new StoreInventory
+            {
+                StoreId = request.StoreId,
+                IngredientId = request.IngredientId,
+                CurrentStock = request.Quantity,
+                MinAlertThreshold = 10,
+                LastCountedAt = DateTime.UtcNow
+            };
+            _context.StoreInventories.Add(inventory);
+        }
+        else
+        {
+            inventory.CurrentStock += request.Quantity;
+            inventory.LastCountedAt = DateTime.UtcNow;
+        }
+
+        var transaction = new InventoryTransaction
+        {
+            StoreId = request.StoreId,
+            IngredientId = request.IngredientId,
+            TransactionType = InventoryTransactionType.Inbound_HQ,
+            QuantityChange = request.Quantity,
+            BalanceAfter = inventory.CurrentStock,
+            Note = request.Note ?? "Nhập kho chi nhánh"
+        };
+        _context.InventoryTransactions.Add(transaction);
+
+        await _context.SaveChangesAsync(ct);
+
+        return new StoreInventoryResponse(
+            inventory.StoreId,
+            inventory.IngredientId,
+            ingredient.Code,
+            ingredient.Name,
+            ingredient.Unit,
+            inventory.CurrentStock,
+            inventory.MinAlertThreshold,
+            inventory.LastCountedAt
+        );
+    }
 }

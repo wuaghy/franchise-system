@@ -8,4 +8,19 @@ public interface IInventoryService
     Task<InventoryDeductionResult> ProcessOrderInventoryDeductionAsync(
         CheckoutOrderInventoryRequest request, 
         CancellationToken ct = default);
+
+    // Lấy danh sách tồn kho hiện tại của chi nhánh
+    Task<List<StoreInventoryResponse>> GetStoreInventoryAsync(
+        Guid storeId, 
+        CancellationToken ct = default);
+
+    // Lấy danh sách nguyên vật liệu chạm ngưỡng báo động đỏ
+    Task<List<LowStockAlertResponse>> GetLowStockAlertsAsync(
+        Guid storeId, 
+        CancellationToken ct = default);
+
+    // Nhập hàng về kho chi nhánh (Inbound)
+    Task<StoreInventoryResponse> InboundStockAsync(
+        InboundStockRequest request, 
+        CancellationToken ct = default);
 }
