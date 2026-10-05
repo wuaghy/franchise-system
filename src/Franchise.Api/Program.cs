@@ -7,7 +7,6 @@ using Franchise.Application.Common.Interfaces;
 using Franchise.Infrastructure;
 using Franchise.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,8 +31,6 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = true;
 });
 builder.Services.AddScoped<IRealtimeNotificationService, RealtimeNotificationService>();
-builder.Services.AddSingleton<HubConfiguration>();
-builder.Services.AddScoped<FranchiseHub>();
 
 // 4. CORS Policy hỗ trợ SignalR WebSockets
 builder.Services.AddCors(options =>

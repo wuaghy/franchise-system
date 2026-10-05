@@ -1,5 +1,6 @@
 using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Inventory;
+using Franchise.Application.DTOs.Realtime;
 using Franchise.Domain.Entities;
 using Franchise.Domain.Enums;
 using Franchise.Domain.Exceptions;
@@ -12,10 +13,12 @@ namespace Franchise.Infrastructure.Services;
 public class InventoryService : IInventoryService
 {
     private readonly AppDbContext _context;
+    private readonly IRealtimeNotificationService? _notificationService;
 
-    public InventoryService(AppDbContext context)
+    public InventoryService(AppDbContext context, IRealtimeNotificationService? notificationService = null)
     {
         _context = context;
+        _notificationService = notificationService;
     }
 
     public async Task<InventoryDeductionResult> ProcessOrderInventoryDeductionAsync(
@@ -69,6 +72,7 @@ public class InventoryService : IInventoryService
                     {
                         var ingId = mod.IngredientId.Value;
                         var needed = mod.ConsumptionQuantity * item.Quantity;
+                        var modName = mod.Name;
 
                         if (totalDemand.TryGetValue(ingId, out var existing))
                         {
@@ -76,67 +80,68 @@ public class InventoryService : IInventoryService
                         }
                         else
                         {
-                            totalDemand[ingId] = (mod.Name, needed);
+                            totalDemand[ingId] = (modName, needed);
                         }
                     }
                 }
             }
         }
 
-        // 3. DEADLOCK-FREE SORTING: Sắp xếp các IngredientId theo thứ tự cố định (tránh circular lock)
-        var sortedIngredientIds = totalDemand.Keys.OrderBy(id => id).ToList();
-        var deductedList = new List<DeductedIngredientDetail>();
+        if (!totalDemand.Any())
+        {
+            // Đơn hàng không tiêu hao nguyên liệu nào (ví dụ sản phẩm đóng gói sẵn không có BoM)
+            return new InventoryDeductionResult(true, request.OrderCode, Array.Empty<DeductedIngredientDetail>());
+        }
 
-        // 4. THỰC THI TRONG DATABASE TRANSACTION BẢO ĐẢM TÍNH TOÀN VẸN (ACID)
+        // 3. KHÓA TẤT CẢ DÒNG TỒN KHO THEO THỨ TỰ CỐ ĐỊNH ĐỂ CHỐNG DEADLOCK (Deadlock-Free Sorting)
+        // Sắp xếp các IngredientId theo GUID để mọi giao dịch đồng thời đều khóa theo đúng 1 thứ tự
+        var sortedIngredientIds = totalDemand.Keys.OrderBy(id => id).ToList();
+
         IDbContextTransaction? dbTransaction = null;
-        if (_context.Database.IsRelational() && _context.Database.CurrentTransaction == null)
+        if (_context.Database.CurrentTransaction == null)
         {
             dbTransaction = await _context.Database.BeginTransactionAsync(ct);
         }
 
         try
         {
-            // Giai đoạn 4.1: Khóa dòng cấp cơ sở dữ liệu (Pessimistic Row Lock: SELECT ... FOR UPDATE)
-            List<StoreInventory> lockedRows;
-            if (_context.Database.IsRelational())
-            {
-                var ids = sortedIngredientIds.ToArray();
-                lockedRows = await _context.StoreInventories
-                    .FromSqlInterpolated($@"
-                        SELECT * FROM ""StoreInventories""
-                        WHERE ""StoreId"" = {request.StoreId}
-                          AND ""IngredientId"" = ANY({ids})
-                        ORDER BY ""IngredientId""
-                        FOR UPDATE")
-                    .Include(si => si.Ingredient)
-                    .ToListAsync(ct);
-            }
-            else
-            {
-                // Fallback cho môi trường Unit Test (EF Core InMemory)
-                lockedRows = await _context.StoreInventories
-                    .Where(si => si.StoreId == request.StoreId && sortedIngredientIds.Contains(si.IngredientId))
-                    .Include(si => si.Ingredient)
-                    .OrderBy(si => si.IngredientId)
-                    .ToListAsync(ct);
-            }
-
-            var byIngredient = lockedRows.ToDictionary(r => r.IngredientId);
+            var deductedList = new List<DeductedIngredientDetail>();
             var inventoriesToDeduct = new List<(StoreInventory Inventory, decimal QuantityToDeduct, string IngredientName)>();
+            var isRelational = _context.Database.IsRelational();
 
+            // Giai đoạn 4.1: Khóa dòng và Kiểm tra điều kiện đủ hàng (Validation Phase)
             foreach (var ingredientId in sortedIngredientIds)
             {
-                var demand = totalDemand[ingredientId];
+                StoreInventory? inventory = null;
 
-                if (!byIngredient.TryGetValue(ingredientId, out var inventory) || inventory.CurrentStock < demand.Quantity)
+                if (isRelational)
                 {
-                    var available = inventory?.CurrentStock ?? 0;
-                    var ingredientDisplayName = inventory?.Ingredient?.Name ?? demand.Name;
-                    throw new InsufficientStockException(ingredientId, ingredientDisplayName, demand.Quantity, available);
+                    // Pessimistic Locking: SELECT ... FOR UPDATE trên PostgreSQL
+                    inventory = await _context.StoreInventories
+                        .FromSqlInterpolated($"SELECT * FROM \"StoreInventories\" WHERE \"StoreId\" = {request.StoreId} AND \"IngredientId\" = {ingredientId} FOR UPDATE")
+                        .FirstOrDefaultAsync(ct);
+                }
+                else
+                {
+                    // Fallback cho EF Core In-Memory (trong môi trường Unit Test)
+                    inventory = await _context.StoreInventories
+                        .FirstOrDefaultAsync(si => si.StoreId == request.StoreId && si.IngredientId == ingredientId, ct);
                 }
 
-                var displayName = inventory.Ingredient?.Name ?? demand.Name;
-                inventoriesToDeduct.Add((inventory, demand.Quantity, displayName));
+                var demand = totalDemand[ingredientId];
+
+                // Nếu chưa có record tồn kho tại chi nhánh hoặc số tồn < nhu cầu -> THẤT BẠI
+                if (inventory == null)
+                {
+                    throw new InsufficientStockException(ingredientId, demand.Name, demand.Quantity, 0);
+                }
+
+                if (inventory.CurrentStock < demand.Quantity)
+                {
+                    throw new InsufficientStockException(ingredientId, demand.Name, demand.Quantity, inventory.CurrentStock);
+                }
+
+                inventoriesToDeduct.Add((inventory, demand.Quantity, demand.Name));
             }
 
             // Giai đoạn 4.2: Áp dụng trừ kho nguyên tử & ghi sổ cái bất biến (Ledger Audit)
@@ -168,6 +173,46 @@ public class InventoryService : IInventoryService
             if (dbTransaction != null)
             {
                 await dbTransaction.CommitAsync(ct);
+            }
+
+            // Giai đoạn 4.3: Real-time SignalR Event Broadcasts
+            if (_notificationService != null)
+            {
+                try
+                {
+                    var updates = deductedList.Select(d => new InventoryUpdatedNotification(
+                        request.StoreId,
+                        d.IngredientId,
+                        d.IngredientName,
+                        d.QuantityDeducted,
+                        d.BalanceAfter
+                    )).ToList();
+
+                    await _notificationService.NotifyInventoryUpdatedAsync(request.StoreId, updates, ct);
+
+                    // Kiểm tra và phát cảnh báo nếu chạm ngưỡng an toàn
+                    foreach (var (inv, _, ingName) in inventoriesToDeduct)
+                    {
+                        if (inv.CurrentStock <= inv.MinAlertThreshold)
+                        {
+                            await _notificationService.NotifyLowStockAlertAsync(new LowStockAlertNotification(
+                                request.StoreId,
+                                inv.IngredientId,
+                                inv.Ingredient?.Code ?? string.Empty,
+                                ingName,
+                                inv.Ingredient?.Unit ?? string.Empty,
+                                inv.CurrentStock,
+                                inv.MinAlertThreshold,
+                                inv.MinAlertThreshold - inv.CurrentStock,
+                                DateTime.UtcNow
+                            ), ct);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Lỗi SignalR broadcast không làm hủy giao dịch đơn hàng DB
+                }
             }
 
             return new InventoryDeductionResult(true, request.OrderCode, deductedList);
@@ -279,6 +324,21 @@ public class InventoryService : IInventoryService
         _context.InventoryTransactions.Add(transaction);
 
         await _context.SaveChangesAsync(ct);
+
+        if (_notificationService != null)
+        {
+            try
+            {
+                await _notificationService.NotifyInventoryUpdatedAsync(
+                    request.StoreId,
+                    new[] { new InventoryUpdatedNotification(request.StoreId, request.IngredientId, ingredient.Name, -request.Quantity, inventory.CurrentStock) },
+                    ct);
+            }
+            catch
+            {
+                // Ignore real-time broadcast exception
+            }
+        }
 
         return new StoreInventoryResponse(
             inventory.StoreId,

@@ -1,3 +1,7 @@
+using System.Text.Json;
+using Franchise.Application.Common.Interfaces;
+using Franchise.Application.DTOs.Orders;
+using Franchise.Application.DTOs.Realtime;
 using Franchise.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +34,7 @@ public class OutboxProcessorBackgroundService : BackgroundService
             {
                 using var scope = _scopeFactory.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var notificationService = scope.ServiceProvider.GetService<IRealtimeNotificationService>();
 
                 var pendingMessages = await dbContext.OutboxMessages
                     .Where(m => m.ProcessedAt == null)
@@ -51,7 +56,29 @@ public class OutboxProcessorBackgroundService : BackgroundService
                                 message.AggregateType,
                                 message.AggregateId);
 
-                            // Giả lập gửi event sang Message Broker (RabbitMQ / Kafka)
+                            // 1. Phân phối Real-time SignalR Event nếu là OrderCompleted
+                            if (message.EventType == nameof(OrderCompletedDomainEvent) &&
+                                !string.IsNullOrWhiteSpace(message.Payload) &&
+                                notificationService != null)
+                            {
+                                var domainEvent = JsonSerializer.Deserialize<OrderCompletedDomainEvent>(
+                                    message.Payload,
+                                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                                if (domainEvent != null)
+                                {
+                                    await notificationService.NotifyOrderCompletedAsync(
+                                        new OrderCompletedNotification(
+                                            domainEvent.OrderId,
+                                            domainEvent.OrderNumber,
+                                            domainEvent.StoreId,
+                                            domainEvent.FinalAmount,
+                                            domainEvent.CompletedAt),
+                                        stoppingToken);
+                                }
+                            }
+
+                            // 2. Đánh dấu đã xử lý thành công
                             message.ProcessedAt = DateTime.UtcNow;
                             message.Error = null;
                         }
