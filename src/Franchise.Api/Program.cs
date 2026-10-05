@@ -1,8 +1,11 @@
 using System.Diagnostics;
+using Franchise.Api.ExceptionHandling;
+using Franchise.Api.Hubs;
+using Franchise.Api.Services;
 using Franchise.Application;
+using Franchise.Application.Common.Interfaces;
 using Franchise.Infrastructure;
 using Franchise.Infrastructure.Data;
-using Franchise.Api.ExceptionHandling;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +25,22 @@ builder.Services.AddProblemDetails(options =>
 });
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
+// 3. Real-time SignalR Hub & Notification Service
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IRealtimeNotificationService, RealtimeNotificationService>();
+
+// 4. CORS Policy hỗ trợ SignalR WebSockets
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("SignalRCorsPolicy", policy =>
+    {
+        policy.SetIsOriginAllowed(_ => true)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -36,7 +55,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-// 3. TỰ ĐỘNG TẠO BẢNG TRONG DATABASE KHI KHỞI ĐỘNG (Auto-Migration)
+// 5. TỰ ĐỘNG TẠO BẢNG TRONG DATABASE KHI KHỞI ĐỘNG (Auto-Migration)
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -51,7 +70,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors("SignalRCorsPolicy");
 app.UseAuthorization();
+
 app.MapControllers();
+app.MapHub<FranchiseHub>("/hubs/franchise");
 
 app.Run();
