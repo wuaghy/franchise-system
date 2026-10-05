@@ -89,7 +89,7 @@ public class InventoryService : IInventoryService
 
         // 4. THỰC THI TRONG DATABASE TRANSACTION BẢO ĐẢM TÍNH TOÀN VẸN (ACID)
         IDbContextTransaction? dbTransaction = null;
-        if (_context.Database.IsRelational())
+        if (_context.Database.IsRelational() && _context.Database.CurrentTransaction == null)
         {
             dbTransaction = await _context.Database.BeginTransactionAsync(ct);
         }

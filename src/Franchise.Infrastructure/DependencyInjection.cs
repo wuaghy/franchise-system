@@ -15,6 +15,8 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString));
 
         services.AddScoped<Franchise.Application.Common.Interfaces.IInventoryService, Services.InventoryService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.IOrderService, Services.OrderService>();
+        services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;
     }
