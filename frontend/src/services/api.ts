@@ -3,6 +3,8 @@
  * Integrates directly with ASP.NET Core 8 Web API backend
  */
 
+import { getTokenFromLocalStorage } from '../auth/auth';
+ 
 export interface StoreItem {
   id: string;
   code: string;
@@ -93,6 +95,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
+      ...(getTokenFromLocalStorage() ? { Authorization: `Bearer ${getTokenFromLocalStorage()}` } : {}),
     },
     ...options,
   });
