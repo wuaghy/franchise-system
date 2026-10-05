@@ -1,14 +1,39 @@
 using Microsoft.AspNetCore.SignalR;
+using Franchise.Application.Common.Interfaces;
+using Franchise.Domain.Entities;
+using Microsoft.Extensions.Configuration;
 
 namespace Franchise.Api.Hubs;
 
 public class FranchiseHub : Hub<IFranchiseHubClient>
 {
     private readonly ILogger<FranchiseHub> _logger;
+    private readonly IAuthService _authService;
+    private readonly IConfiguration _configuration;
 
-    public FranchiseHub(ILogger<FranchiseHub> logger)
+    public FranchiseHub(
+        ILogger<FranchiseHub> logger,
+        IAuthService authService,
+        IConfiguration configuration)
     {
         _logger = logger;
+        _authService = authService;
+        _configuration = configuration;
+    }
+
+    public override async Task OnConnectedAsync()
+    {
+        var token = Context.Headers["Authorization"].FirstOrDefault();
+        if (string.IsNullOrEmpty(token))
+            throw new UnauthorizedException("Missing Authorization Token");
+
+        var isValid = _authService.ValidateToken(token, out var user);
+        if (!isValid)
+            throw new UnauthorizedException("Invalid Authorization Token");
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, user.StoreId?.ToString() ?? "hq");
+        await Groups.AddToGroupAsync(Context.ConnectionId, "all");
+        await base.OnConnectedAsync();
     }
 
     public async Task JoinStoreGroup(string storeId)
