@@ -43,3 +43,45 @@ public class FranchiseHub : Hub<IFranchiseHubClient>
         await base.OnDisconnectedAsync(exception);
     }
 }
+using Microsoft.AspNetCore.SignalR;
+using System.Threading.Tasks;
+using Franchise.Application.DTOs.Realtime;
+
+namespace Franchise.Api.Hubs
+{
+    public class FranchiseHub : Hub
+    {
+        public async Task JoinStoreGroup(string storeId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"store_{storeId}");
+        }
+
+        public async Task LeaveStoreGroup(string storeId)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"store_{storeId}");
+        }
+
+        public async Task JoinHQGroup()
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, "hq_admin");
+        }
+
+        public async Task SendOrderCompleted(OrderCompletedNotification notification)
+        {
+            await Clients.Groups($"store_{notification.StoreId}")
+                      .SendAsync("orderCompleted", notification);
+        }
+
+        public async Task SendInventoryUpdated(IReadOnlyList<InventoryUpdatedNotification> updates)
+        {
+            await Clients.Groups("hq_admin")
+                      .SendAsync("inventoryUpdated", updates);
+        }
+
+        public async Task SendLowStockAlert(LowStockAlertNotification alert)
+        {
+            await Clients.Groups($"store_{alert.StoreId}")
+                      .SendAsync("lowStockAlert", alert);
+        }
+    }
+}
