@@ -54,6 +54,8 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
     private static (int Status, string Title, string ErrorCode, string Detail) Map(Exception ex) => ex switch
     {
         RequestValidationException e => (400, "Validation Failed", e.ErrorCode, e.Message),
+        UnauthorizedException e      => (401, "Unauthorized",      e.ErrorCode, e.Message),
+        ForbiddenException e         => (403, "Forbidden",         e.ErrorCode, e.Message),
         NotFoundException e          => (404, "Not Found",         e.ErrorCode, e.Message),
         ConflictException e          => (409, "Conflict",          e.ErrorCode, e.Message),
         BusinessRuleException e      => (422, "Business Rule Violation", e.ErrorCode, e.Message),
