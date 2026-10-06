@@ -43,6 +43,11 @@ public class AppDbContext : DbContext
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
+    // 6. Phân hệ Kitchen Display System (KDS) & Barista Queue
+    public DbSet<KitchenTicket> KitchenTickets => Set<KitchenTicket>();
+    public DbSet<KitchenTicketItem> KitchenTicketItems => Set<KitchenTicketItem>();
+    public DbSet<KitchenTicketItemModifier> KitchenTicketItemModifiers => Set<KitchenTicketItemModifier>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -439,5 +444,50 @@ public class AppDbContext : DbContext
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
         );
+
+        // --- 7. KITCHEN DISPLAY SYSTEM (KDS) ---
+        modelBuilder.Entity<KitchenTicket>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.TicketNumber).IsUnique();
+            b.Property(e => e.TicketNumber).IsRequired().HasMaxLength(50);
+            b.Property(e => e.OrderNumber).IsRequired().HasMaxLength(50);
+            b.Property(e => e.OrderType).HasConversion<string>().HasMaxLength(30);
+            b.Property(e => e.Status).HasConversion<string>().HasMaxLength(30);
+            b.Property(e => e.CancellationReason).HasMaxLength(500);
+
+            b.HasOne(e => e.Store)
+                .WithMany()
+                .HasForeignKey(e => e.StoreId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.Order)
+                .WithMany()
+                .HasForeignKey(e => e.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KitchenTicketItem>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.ProductName).IsRequired().HasMaxLength(200);
+            b.Property(e => e.SpecialNote).HasMaxLength(500);
+
+            b.HasOne(e => e.KitchenTicket)
+                .WithMany(t => t.Items)
+                .HasForeignKey(e => e.KitchenTicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KitchenTicketItemModifier>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.ModifierName).IsRequired().HasMaxLength(200);
+
+            b.HasOne(e => e.KitchenTicketItem)
+                .WithMany(i => i.Modifiers)
+                .HasForeignKey(e => e.KitchenTicketItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
