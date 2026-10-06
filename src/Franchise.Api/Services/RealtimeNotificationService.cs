@@ -42,4 +42,25 @@ public class RealtimeNotificationService : IRealtimeNotificationService
         var storeGroup = $"store_{alert.StoreId}";
         await _hubContext.Clients.Groups(storeGroup, "hq_admin").ReceiveLowStockAlert(alert);
     }
+
+    public async Task NotifyKitchenTicketCreatedAsync(Guid storeId, Franchise.Application.DTOs.Kds.KitchenTicketDto ticket, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("SignalR Broadcasting: KitchenTicketCreated #{TicketNumber} cho Store {StoreId}", ticket.TicketNumber, storeId);
+        var storeGroup = $"store_{storeId}";
+        await _hubContext.Clients.Groups(storeGroup, "hq_admin").ReceiveKitchenTicketCreated(ticket);
+    }
+
+    public async Task NotifyKitchenTicketStatusChangedAsync(Guid storeId, Franchise.Application.DTOs.Kds.KitchenTicketStatusChangedNotification notification, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("SignalR Broadcasting: KitchenTicketStatusChanged #{TicketNumber} -> {Status} Store {StoreId}", notification.TicketNumber, notification.Status, storeId);
+        var storeGroup = $"store_{storeId}";
+        await _hubContext.Clients.Groups(storeGroup, "hq_admin").ReceiveKitchenTicketStatusChanged(notification);
+    }
+
+    public async Task NotifyKitchenTicketItemToggledAsync(Guid storeId, Franchise.Application.DTOs.Kds.KitchenTicketItemToggledNotification notification, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("SignalR Broadcasting: KitchenTicketItemToggled Item {ItemId} Store {StoreId}", notification.ItemId, storeId);
+        var storeGroup = $"store_{storeId}";
+        await _hubContext.Clients.Groups(storeGroup, "hq_admin").ReceiveKitchenTicketItemToggled(notification);
+    }
 }
