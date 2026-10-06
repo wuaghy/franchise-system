@@ -22,6 +22,8 @@ public static class DependencyInjection
         services.AddScoped<Franchise.Application.Common.Interfaces.ICostingService, Services.CostingService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.ISupplyChainService, Services.SupplyChainService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IKitchenDisplayService, Services.KitchenDisplayService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.IFinancialAnalyticsService, Services.FinancialAnalyticsService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.IRoyaltyBillingService, Services.RoyaltyBillingService>();
         services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;
