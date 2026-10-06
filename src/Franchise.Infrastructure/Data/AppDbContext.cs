@@ -48,6 +48,10 @@ public class AppDbContext : DbContext
     public DbSet<KitchenTicketItem> KitchenTicketItems => Set<KitchenTicketItem>();
     public DbSet<KitchenTicketItemModifier> KitchenTicketItemModifiers => Set<KitchenTicketItemModifier>();
 
+    // 7. Phân hệ Tài chính, Báo cáo & Phí Nhượng quyền (Royalty & Financial BI)
+    public DbSet<RoyaltyInvoice> RoyaltyInvoices => Set<RoyaltyInvoice>();
+    public DbSet<StoreRoyaltySetting> StoreRoyaltySettings => Set<StoreRoyaltySetting>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -488,6 +492,46 @@ public class AppDbContext : DbContext
                 .WithMany(i => i.Modifiers)
                 .HasForeignKey(e => e.KitchenTicketItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // --- 7. ROYALTY INVOICING & BI SETTINGS ---
+        modelBuilder.Entity<StoreRoyaltySetting>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.StoreId).IsUnique();
+            b.Property(e => e.RoyaltyRate).HasPrecision(5, 4);
+            b.Property(e => e.MarketingFeeRate).HasPrecision(5, 4);
+            b.Property(e => e.TechFeeFixedMonthly).HasPrecision(18, 2);
+
+            b.HasOne(e => e.Store)
+                .WithMany()
+                .HasForeignKey(e => e.StoreId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RoyaltyInvoice>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.InvoiceNumber).IsUnique();
+            b.HasIndex(e => new { e.StoreId, e.BillingYear, e.BillingMonth });
+            b.Property(e => e.InvoiceNumber).IsRequired().HasMaxLength(50);
+            b.Property(e => e.Status).HasConversion<string>().HasMaxLength(30);
+            b.Property(e => e.GrossRevenue).HasPrecision(18, 2);
+            b.Property(e => e.DiscountAmount).HasPrecision(18, 2);
+            b.Property(e => e.NetRevenue).HasPrecision(18, 2);
+            b.Property(e => e.RoyaltyRate).HasPrecision(5, 4);
+            b.Property(e => e.RoyaltyFee).HasPrecision(18, 2);
+            b.Property(e => e.MarketingFeeRate).HasPrecision(5, 4);
+            b.Property(e => e.MarketingFee).HasPrecision(18, 2);
+            b.Property(e => e.TechFee).HasPrecision(18, 2);
+            b.Property(e => e.TotalDue).HasPrecision(18, 2);
+            b.Property(e => e.PaymentReference).HasMaxLength(100);
+            b.Property(e => e.CancellationReason).HasMaxLength(500);
+
+            b.HasOne(e => e.Store)
+                .WithMany()
+                .HasForeignKey(e => e.StoreId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
