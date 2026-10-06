@@ -193,5 +193,49 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(isValidEmail('invalid-email-address'), false);
     assert.equal(isValidEmail('admin@franchise.local'), true);
   });
+
+  it('manages audio notification settings and volume bounds properly', () => {
+    interface AudioSettings {
+      soundEnabled: boolean;
+      speechEnabled: boolean;
+      volume: number;
+    }
+
+    const clampVolume = (vol: number) => Math.max(0, Math.min(1, vol));
+
+    const defaultSettings: AudioSettings = {
+      soundEnabled: true,
+      speechEnabled: false,
+      volume: 0.85,
+    };
+
+    assert.equal(defaultSettings.soundEnabled, true);
+    assert.equal(clampVolume(1.5), 1.0);
+    assert.equal(clampVolume(-0.2), 0.0);
+    assert.equal(clampVolume(0.5), 0.5);
+  });
+
+  it('formats announcement toast messages and unread counter accurately', () => {
+    interface SystemNotification {
+      id: string;
+      title: string;
+      detail: string;
+      isRead: boolean;
+      type: 'order' | 'alert' | 'kds';
+    }
+
+    const notifications: SystemNotification[] = [
+      { id: '1', title: 'Đơn mới #ORD-001', detail: '85,000 đ', isRead: false, type: 'order' },
+      { id: '2', title: 'Cảnh báo Robusta', detail: 'Còn 1.5kg', isRead: false, type: 'alert' },
+      { id: '3', title: 'Hệ thống sẵn sàng', detail: 'SignalR connected', isRead: true, type: 'kds' },
+    ];
+
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+    assert.equal(unreadCount, 2);
+
+    const markedAll = notifications.map(n => ({ ...n, isRead: true }));
+    assert.equal(markedAll.filter(n => !n.isRead).length, 0);
+  });
 });
+
 

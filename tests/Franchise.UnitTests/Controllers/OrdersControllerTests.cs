@@ -12,12 +12,14 @@ namespace Franchise.UnitTests.Controllers;
 public class OrdersControllerTests
 {
     private readonly Mock<IOrderService> _mockOrderService;
+    private readonly Mock<IRealtimeNotificationService> _mockRealtimeNotificationService;
     private readonly OrdersController _controller;
 
     public OrdersControllerTests()
     {
         _mockOrderService = new Mock<IOrderService>();
-        _controller = new OrdersController(_mockOrderService.Object);
+        _mockRealtimeNotificationService = new Mock<IRealtimeNotificationService>();
+        _controller = new OrdersController(_mockOrderService.Object, _mockRealtimeNotificationService.Object);
     }
 
     [Fact]
@@ -61,5 +63,38 @@ public class OrdersControllerTests
         okResult.Should().NotBeNull();
         okResult!.StatusCode.Should().Be(200);
         okResult.Value.Should().BeEquivalentTo(expectedResponse);
+
+        _mockRealtimeNotificationService.Verify(
+            s => s.NotifyOrderCompletedAsync(It.Is<Franchise.Application.DTOs.Realtime.OrderCompletedNotification>(
+                n => n.OrderNumber == expectedResponse.OrderNumber && n.FinalAmount == expectedResponse.FinalAmount
+            ), It.IsAny<CancellationToken>()),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task AnnounceOnlineOrder_ShouldBroadcastNotification_AndReturnOk()
+    {
+        // Arrange
+        var notification = new Franchise.Application.DTOs.Realtime.OrderCompletedNotification(
+            Guid.NewGuid(),
+            "ORD-GRAB-001",
+            Guid.NewGuid(),
+            85000m,
+            DateTime.UtcNow
+        );
+
+        // Act
+        var result = await _controller.AnnounceOnlineOrder(notification, CancellationToken.None);
+
+        // Assert
+        var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
+        okResult!.StatusCode.Should().Be(200);
+
+        _mockRealtimeNotificationService.Verify(
+            s => s.NotifyOrderCompletedAsync(notification, It.IsAny<CancellationToken>()),
+            Times.Once
+        );
     }
 }

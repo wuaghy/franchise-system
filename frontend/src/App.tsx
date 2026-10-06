@@ -47,9 +47,14 @@ import {
   Coffee,
   BarChart3,
   Mail,
+  BellOff,
+  Volume2,
+  VolumeX,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { realtimeHub, type ConnectionStatus, type LowStockAlertNotification } from "./services/signalr.ts";
+import { audioNotifier, type AudioSettings } from "./services/audioNotification.ts";
 import {
   getCurrentUser,
   login as apiLogin,
@@ -77,6 +82,16 @@ import {
 type Screen = "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics";
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
+
+export interface SystemNotification {
+  id: string;
+  title: string;
+  detail: string;
+  amount?: number;
+  time: string;
+  type: "order" | "alert" | "kds";
+  isRead: boolean;
+}
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost" | "danger";
@@ -147,6 +162,17 @@ function Header({
   currentUser,
   openLogin,
   onLogout,
+  notifications,
+  unreadCount,
+  isNotifOpen,
+  setIsNotifOpen,
+  audioSettings,
+  onToggleSound,
+  onToggleSpeech,
+  onTestSound,
+  onSimulateOrder,
+  onClearNotifications,
+  onMarkAllRead,
 }: {
   screen: Screen;
   setScreen: (screen: Screen) => void;
@@ -154,6 +180,17 @@ function Header({
   currentUser: User | null;
   openLogin: () => void;
   onLogout: () => void;
+  notifications: SystemNotification[];
+  unreadCount: number;
+  isNotifOpen: boolean;
+  setIsNotifOpen: (open: boolean) => void;
+  audioSettings: AudioSettings;
+  onToggleSound: () => void;
+  onToggleSpeech: () => void;
+  onTestSound: () => void;
+  onSimulateOrder: () => void;
+  onClearNotifications: () => void;
+  onMarkAllRead: () => void;
 }) {
   const badgeTone = connectionStatus === "Connected" ? "success" : connectionStatus === "Reconnecting" ? "warning" : "neutral";
   const badgeText = connectionStatus === "Connected" ? "Outbox Synced" : connectionStatus === "Reconnecting" ? "Reconnecting..." : "Offline";
@@ -218,10 +255,146 @@ function Header({
             </Button>
           )}
 
-          <Button variant="ghost" className="!size-10 !min-h-10 !p-0" aria-label="Notifications">
-            <Bell size={18} />
-            <span className="absolute mt-[-18px] ml-[16px] size-2 rounded-full bg-red-600 ring-2 ring-white" />
-          </Button>
+          {/* Bell & Announcement Center */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              onClick={() => setIsNotifOpen(!isNotifOpen)}
+              className="relative !size-10 !min-h-10 !p-0"
+              aria-label="Notifications"
+            >
+              {audioSettings.soundEnabled ? (
+                <Bell size={18} className={unreadCount > 0 ? "text-red-700" : "text-slate-600"} />
+              ) : (
+                <BellOff size={18} className="text-slate-400" />
+              )}
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 grid min-w-4.5 h-4.5 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white ring-2 ring-white shadow-xs">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Button>
+
+            <AnimatePresence>
+              {isNotifOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  transition={{ duration: 0.16 }}
+                  className="absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="grid size-7 place-items-center rounded-lg bg-red-50 text-red-700">
+                        <Bell size={15} />
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900">Chuông báo & Đơn hàng</h4>
+                        <p className="text-[10px] text-slate-400 font-semibold">{unreadCount} thông báo chưa xem</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={onMarkAllRead}
+                          className="rounded-lg px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100 transition"
+                        >
+                          Đã đọc
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button
+                          onClick={onClearNotifications}
+                          className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                          title="Xóa danh sách"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Audio Controls Box */}
+                  <div className="my-3 rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                        {audioSettings.soundEnabled ? <Volume2 size={14} className="text-emerald-600" /> : <VolumeX size={14} className="text-slate-400" />}
+                        <span>Chuông POS (Web Audio)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={onTestSound}
+                          className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95"
+                          title="Phát thử âm thanh Ting-Ting"
+                        >
+                          Thử chuông
+                        </button>
+                        <button
+                          onClick={onToggleSound}
+                          className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold transition ${
+                            audioSettings.soundEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {audioSettings.soundEnabled ? "BẬT" : "TẮT"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-200/50 pt-2 text-[11px]">
+                      <span className="text-[10px] text-slate-500 font-medium">Giọng đọc đơn AI (TTS):</span>
+                      <button
+                        onClick={onToggleSpeech}
+                        className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition ${
+                          audioSettings.speechEnabled ? "bg-red-100 text-red-800" : "bg-slate-200 text-slate-600"
+                        }`}
+                      >
+                        {audioSettings.speechEnabled ? "BẬT" : "TẮT"}
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={onSimulateOrder}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-800/10 hover:bg-red-800/15 py-1.5 text-[11px] font-extrabold text-red-900 transition active:scale-98"
+                    >
+                      <Zap size={13} className="text-red-700" />
+                      <span>Giả lập đơn Online (Reng chuông)</span>
+                    </button>
+                  </div>
+
+                  {/* Notification List */}
+                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-0.5">
+                    {notifications.length === 0 ? (
+                      <div className="py-6 text-center text-[11px] text-slate-400">
+                        Chưa có thông báo nào
+                      </div>
+                    ) : (
+                      notifications.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`flex items-start gap-2.5 rounded-xl p-2.5 transition text-left ${
+                            item.isRead ? "bg-slate-50/50 text-slate-600" : "bg-red-50/40 border border-red-100/70 text-slate-900"
+                          }`}
+                        >
+                          <span className={`grid size-6 shrink-0 place-items-center rounded-md text-[10px] font-black ${
+                            item.type === "order" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {item.type === "order" ? "₫" : "!"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black truncate">{item.title}</p>
+                            <p className="text-[11px] text-slate-500 font-medium">{item.detail}</p>
+                            <span className="text-[9px] font-bold text-slate-400">{item.time}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <button className="hidden items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm md:flex">
             <span className="grid size-8 place-items-center rounded-lg bg-red-50 text-red-800">
               <Store size={16} />
@@ -2071,6 +2244,73 @@ export default function App() {
   const [activeAlert, setActiveAlert] = useState<LowStockAlertNotification | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
 
+  // Announcement & Notification State
+  const [notifications, setNotifications] = useState<SystemNotification[]>([
+    {
+      id: "init-1",
+      title: "Hệ thống chuông báo sẵn sàng",
+      detail: "Web Audio Synthesizer đã kích hoạt trên trình duyệt",
+      time: "Hôm nay",
+      type: "kds",
+      isRead: true,
+    },
+  ]);
+  const [activeToast, setActiveToast] = useState<SystemNotification | null>(null);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(() => audioNotifier.getSettings());
+
+  useEffect(() => {
+    if (!activeToast) return;
+    const timer = setTimeout(() => {
+      setActiveToast(null);
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [activeToast]);
+
+  const handleToggleSound = () => {
+    const updated = audioNotifier.saveSettings({ soundEnabled: !audioSettings.soundEnabled });
+    setAudioSettings(updated);
+  };
+
+  const handleToggleSpeech = () => {
+    const updated = audioNotifier.saveSettings({ speechEnabled: !audioSettings.speechEnabled });
+    setAudioSettings(updated);
+  };
+
+  const handleTestSound = () => {
+    audioNotifier.testSound();
+  };
+
+  const handleSimulateOrder = () => {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const orderNum = `ORD-ONLINE-${randomNum}`;
+    const amount = [55000, 75000, 95000, 120000][Math.floor(Math.random() * 4)];
+    const simNotif: SystemNotification = {
+      id: `sim-${Date.now()}`,
+      title: `Đơn online mới #${orderNum}`,
+      detail: `ShopeeFood / App Khách · +${amount.toLocaleString("vi-VN")} đ`,
+      amount,
+      time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      type: "order",
+      isRead: false,
+    };
+    setNotifications((prev) => [simNotif, ...prev.slice(0, 29)]);
+    setActiveToast(simNotif);
+    setDailyRevenue((prev) => prev + amount);
+
+    // Kích hoạt chuông báo Ting-Ting!
+    audioNotifier.playOrderChime("urgent");
+    audioNotifier.speakAnnouncement(`Có đơn hàng online mới, ${orderNum}`);
+  };
+
+  const handleClearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const handleMarkAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
+
   useEffect(() => {
     // 1. Khởi chạy kết nối SignalR Hub
     realtimeHub.start();
@@ -2080,9 +2320,24 @@ export default function App() {
       setConnectionStatus(status);
     });
 
-    // 3. Lắng nghe sự kiện Đơn hàng hoàn tất -> Cập nhật doanh thu real-time
+    // 3. Lắng nghe sự kiện Đơn hàng hoàn tất -> Cập nhật doanh thu & phát chuông báo
     const unsubOrder = realtimeHub.onOrderCompleted((notification) => {
       setDailyRevenue((prev) => prev + notification.finalAmount);
+      const newNotif: SystemNotification = {
+        id: `ord-${Date.now()}`,
+        title: `Đơn hàng #${notification.orderNumber}`,
+        detail: `Thanh toán thành công · +${notification.finalAmount.toLocaleString("vi-VN")} đ`,
+        amount: notification.finalAmount,
+        time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        type: "order",
+        isRead: false,
+      };
+      setNotifications((prev) => [newNotif, ...prev.slice(0, 29)]);
+      setActiveToast(newNotif);
+
+      // Kích hoạt chuông âm thanh Ting-Ting
+      audioNotifier.playOrderChime("standard");
+      audioNotifier.speakAnnouncement(`Đơn hàng mới, ${notification.orderNumber}`);
     });
 
     // 4. Lắng nghe sự kiện Biến động tồn kho -> Cập nhật ledger
@@ -2101,6 +2356,16 @@ export default function App() {
     // 5. Lắng nghe Cảnh báo Low Stock
     const unsubAlert = realtimeHub.onLowStockAlert((alert) => {
       setActiveAlert(alert);
+      const newNotif: SystemNotification = {
+        id: `alert-${Date.now()}`,
+        title: `Cảnh báo kho: ${alert.ingredientName}`,
+        detail: `Tồn kho còn ${alert.currentStock} ${alert.unit} (dưới mức ${alert.minAlertThreshold})`,
+        time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        type: "alert",
+        isRead: false,
+      };
+      setNotifications((prev) => [newNotif, ...prev.slice(0, 29)]);
+      audioNotifier.playOrderChime("alert");
     });
 
     return () => {
@@ -2128,6 +2393,17 @@ export default function App() {
           apiLogout();
           setCurrentUser(null);
         }}
+        notifications={notifications}
+        unreadCount={notifications.filter((n) => !n.isRead).length}
+        isNotifOpen={isNotifOpen}
+        setIsNotifOpen={setIsNotifOpen}
+        audioSettings={audioSettings}
+        onToggleSound={handleToggleSound}
+        onToggleSpeech={handleToggleSpeech}
+        onTestSound={handleTestSound}
+        onSimulateOrder={handleSimulateOrder}
+        onClearNotifications={handleClearNotifications}
+        onMarkAllRead={handleMarkAllRead}
       />
       <div id="main-content" aria-label={title}>
         {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
@@ -2150,6 +2426,64 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Floating Order Announcement Toast */}
+      <AnimatePresence>
+        {activeToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -25, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+            className="fixed top-20 right-4 z-50 flex max-w-sm items-start gap-3 rounded-2xl border border-red-200 bg-white/95 p-4 shadow-2xl backdrop-blur-xl ring-1 ring-slate-900/5"
+          >
+            <motion.div
+              animate={{ rotate: [0, -18, 18, -12, 12, 0] }}
+              transition={{ duration: 0.6, repeat: 2 }}
+              className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-red-600 to-red-800 text-white shadow-md shadow-red-600/30"
+            >
+              <Bell size={20} />
+            </motion.div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase text-red-800">
+                  {activeToast.type === "order" ? "🔔 ĐƠN HÀNG MỚI" : "⚠️ CẢNH BÁO KHO"}
+                </span>
+                <span className="text-[10px] font-medium text-slate-400">{activeToast.time}</span>
+              </div>
+              <p className="mt-1 truncate text-xs font-black text-slate-900">{activeToast.title}</p>
+              <p className="text-xs font-bold text-emerald-700">{activeToast.detail}</p>
+              <div className="mt-2.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScreen("kds");
+                    setActiveToast(null);
+                  }}
+                  className="rounded-lg bg-red-700 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-red-800"
+                >
+                  Xem KDS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveToast(null)}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:bg-slate-100"
+                >
+                  Đã nhận
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveToast(null)}
+              className="text-slate-400 transition hover:text-slate-600"
+            >
+              <X size={15} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="pointer-events-none fixed bottom-4 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-[10px] font-bold text-slate-500 shadow-lg backdrop-blur md:flex lg:hidden">
         <Wifi size={12} className={connectionStatus === "Connected" ? "text-emerald-600" : "text-amber-500"} /> Live operations · {connectionStatus}
       </div>
