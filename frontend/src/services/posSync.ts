@@ -9,8 +9,7 @@ import {
   removeOfflineOrder,
   OfflineOrderSyncItem,
 } from './offlineQueue.ts';
-
-const API_BASE = '/api';
+import { API_BASE } from '../config/api.ts';
 
 export interface OfflineOrderSyncResult {
   offlineOrderId: string;

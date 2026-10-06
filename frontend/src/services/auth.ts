@@ -47,6 +47,8 @@ export function saveAuthData(auth: AuthResponse): void {
   localStorage.setItem('user', JSON.stringify(auth.user));
 }
 
+import { API_BASE } from '../config/api.ts';
+
 export function clearAuthData(): void {
   localStorage.removeItem('token');
   localStorage.removeItem('refreshToken');
@@ -54,7 +56,7 @@ export function clearAuthData(): void {
 }
 
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
-  const response = await fetch('/api/auth/login', {
+  const response = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -82,7 +84,7 @@ export function logout(): void {
 }
 
 export async function googleLogin(idToken: string, storeId?: string): Promise<AuthResponse> {
-  const response = await fetch('/api/auth/google', {
+  const response = await fetch(`${API_BASE}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken, storeId }),
@@ -105,7 +107,7 @@ export async function googleLogin(idToken: string, storeId?: string): Promise<Au
 }
 
 export async function sendOtp(email: string): Promise<boolean> {
-  const response = await fetch('/api/auth/send-otp', {
+  const response = await fetch(`${API_BASE}/auth/send-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -126,7 +128,7 @@ export async function sendOtp(email: string): Promise<boolean> {
 }
 
 export async function verifyOtpLogin(email: string, otpCode: string): Promise<AuthResponse> {
-  const response = await fetch('/api/auth/verify-otp', {
+  const response = await fetch(`${API_BASE}/auth/verify-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, otpCode }),

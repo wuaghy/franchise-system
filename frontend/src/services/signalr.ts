@@ -1,5 +1,6 @@
 import * as signalR from '@microsoft/signalr';
 import { getTokenFromLocalStorage } from './auth.ts';
+import { HUB_URL } from '../config/api.ts';
 import type { KitchenTicketDto, KitchenTicketStatusChangedNotification, KitchenTicketItemToggledNotification } from './kds.ts';
 
 export interface OrderCompletedNotification {
@@ -49,7 +50,7 @@ class SignalRService {
 
   private initConnection() {
     this.connection = new signalR.HubConnectionBuilder()
-      .withUrl('/hubs/franchise', {
+      .withUrl(HUB_URL, {
         skipNegotiation: false,
         transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
         accessTokenFactory: () => getTokenFromLocalStorage() || '',

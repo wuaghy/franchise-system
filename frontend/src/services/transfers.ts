@@ -4,8 +4,7 @@
  */
 
 import { getTokenFromLocalStorage } from './auth.ts';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE } from '../config/api.ts';
 
 function getAuthHeaders(): HeadersInit {
   const token = getTokenFromLocalStorage();
@@ -153,20 +152,20 @@ export async function getTransferOrders(filter?: TransferOrderFilter): Promise<S
   if (filter?.fromDate) query.append('fromDate', filter.fromDate);
   if (filter?.toDate) query.append('toDate', filter.toDate);
 
-  const url = `${API_BASE_URL}/api/transfers${query.toString() ? '?' + query.toString() : ''}`;
+  const url = `${API_BASE}/transfers${query.toString() ? '?' + query.toString() : ''}`;
   const res = await fetch(url, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Lỗi tải danh sách đơn điều chuyển (${res.status})`);
   return res.json();
 }
 
 export async function getTransferOrderById(id: string): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}`, { headers: getAuthHeaders() });
+  const res = await fetch(`${API_BASE}/transfers/${id}`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Không tìm thấy đơn điều chuyển (${res.status})`);
   return res.json();
 }
 
 export async function createTransferOrder(request: CreateTransferOrderRequest): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers`, {
+  const res = await fetch(`${API_BASE}/transfers`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(request)
@@ -179,7 +178,7 @@ export async function createTransferOrder(request: CreateTransferOrderRequest): 
 }
 
 export async function submitTransferOrder(id: string): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}/submit`, {
+  const res = await fetch(`${API_BASE}/transfers/${id}/submit`, {
     method: 'POST',
     headers: getAuthHeaders()
   });
@@ -191,7 +190,7 @@ export async function submitTransferOrder(id: string): Promise<StockTransferOrde
 }
 
 export async function approveTransferOrder(id: string, request: ApproveTransferOrderRequest): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}/approve`, {
+  const res = await fetch(`${API_BASE}/transfers/${id}/approve`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(request)
@@ -204,7 +203,7 @@ export async function approveTransferOrder(id: string, request: ApproveTransferO
 }
 
 export async function rejectTransferOrder(id: string, reason: string): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}/reject`, {
+  const res = await fetch(`${API_BASE}/transfers/${id}/reject`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ reason })
@@ -217,7 +216,7 @@ export async function rejectTransferOrder(id: string, reason: string): Promise<S
 }
 
 export async function dispatchTransferOrder(id: string, request: DispatchTransferOrderRequest): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}/dispatch`, {
+  const res = await fetch(`${API_BASE}/transfers/${id}/dispatch`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(request)
@@ -230,7 +229,7 @@ export async function dispatchTransferOrder(id: string, request: DispatchTransfe
 }
 
 export async function receiveTransferOrder(id: string, request: ReceiveTransferOrderRequest): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}/receive`, {
+  const res = await fetch(`${API_BASE}/transfers/${id}/receive`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(request)
@@ -243,7 +242,7 @@ export async function receiveTransferOrder(id: string, request: ReceiveTransferO
 }
 
 export async function resolveDiscrepancy(id: string, resolutionNotes: string): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}/resolve-discrepancy`, {
+  const res = await fetch(`${API_BASE}/transfers/${id}/resolve-discrepancy`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ resolutionNotes })
@@ -256,7 +255,7 @@ export async function resolveDiscrepancy(id: string, resolutionNotes: string): P
 }
 
 export async function cancelTransferOrder(id: string): Promise<StockTransferOrderDto> {
-  const res = await fetch(`${API_BASE_URL}/api/transfers/${id}/cancel`, {
+  const res = await fetch(`${API_BASE}/transfers/${id}/cancel`, {
     method: 'POST',
     headers: getAuthHeaders()
   });
@@ -268,19 +267,19 @@ export async function cancelTransferOrder(id: string): Promise<StockTransferOrde
 }
 
 export async function getWarehouses(): Promise<WarehouseDto[]> {
-  const res = await fetch(`${API_BASE_URL}/api/warehouses`, { headers: getAuthHeaders() });
+  const res = await fetch(`${API_BASE}/warehouses`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Lỗi tải danh sách kho (${res.status})`);
   return res.json();
 }
 
 export async function getWarehouseInventory(warehouseId: string): Promise<WarehouseInventoryDto[]> {
-  const res = await fetch(`${API_BASE_URL}/api/warehouses/${warehouseId}/inventory`, { headers: getAuthHeaders() });
+  const res = await fetch(`${API_BASE}/warehouses/${warehouseId}/inventory`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Lỗi tải tồn kho kho tổng (${res.status})`);
   return res.json();
 }
 
 export async function inboundWarehouseStock(warehouseId: string, request: WarehouseInboundRequest): Promise<WarehouseInventoryDto[]> {
-  const res = await fetch(`${API_BASE_URL}/api/warehouses/${warehouseId}/inbound`, {
+  const res = await fetch(`${API_BASE}/warehouses/${warehouseId}/inbound`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(request)

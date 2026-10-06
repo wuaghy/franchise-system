@@ -4,6 +4,7 @@
  */
 
 import { getTokenFromLocalStorage } from './auth.ts';
+import { API_BASE } from '../config/api.ts';
 
 export interface IngredientCostDetail {
   ingredientId: string;
@@ -104,29 +105,29 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
 export const costingApi = {
   // 1. Lấy danh sách sản phẩm
   async getProducts(): Promise<ProductItem[]> {
-    return requestJson<ProductItem[]>('/api/products');
+    return requestJson<ProductItem[]>(`${API_BASE}/products`);
   },
 
   // 2. Lấy danh sách nguyên vật liệu kho
   async getIngredients(): Promise<IngredientItem[]> {
-    return requestJson<IngredientItem[]>('/api/ingredients');
+    return requestJson<IngredientItem[]>(`${API_BASE}/ingredients`);
   },
 
   // 3. Lấy phân tích COGS toàn bộ menu
   async getAllProductsCosting(storeId?: string): Promise<ProductCosting[]> {
     const q = storeId ? `?storeId=${storeId}` : '';
-    return requestJson<ProductCosting[]>(`/api/costing/products${q}`);
+    return requestJson<ProductCosting[]>(`${API_BASE}/costing/products${q}`);
   },
 
   // 4. Lấy chi tiết COGS của một món
   async getProductCosting(productId: string, storeId?: string): Promise<ProductCosting> {
     const q = storeId ? `?storeId=${storeId}` : '';
-    return requestJson<ProductCosting>(`/api/costing/products/${productId}${q}`);
+    return requestJson<ProductCosting>(`${API_BASE}/costing/products/${productId}${q}`);
   },
 
   // 5. Sandbox What-If simulation
   async simulateRecipe(payload: SimulateRecipeRequest): Promise<SimulateRecipeResponse> {
-    return requestJson<SimulateRecipeResponse>('/api/costing/simulate', {
+    return requestJson<SimulateRecipeResponse>(`${API_BASE}/costing/simulate`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -135,7 +136,7 @@ export const costingApi = {
   // 6. Lưu công thức chính thức
   async saveProductRecipe(productId: string, items: { ingredientId: string; quantity: number }[]): Promise<void> {
     const token = getTokenFromLocalStorage();
-    const res = await fetch(`/api/products/${productId}/recipe`, {
+    const res = await fetch(`${API_BASE}/products/${productId}/recipe`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

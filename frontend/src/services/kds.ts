@@ -4,8 +4,7 @@
  */
 
 import { getTokenFromLocalStorage } from './auth.ts';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE } from '../config/api.ts';
 
 function getAuthHeaders(): HeadersInit {
   const token = getTokenFromLocalStorage();
@@ -73,7 +72,7 @@ export const kdsService = {
    * Lấy danh sách các vé đang hoạt động (New, InPreparation, Ready) tại chi nhánh
    */
   async getActiveTickets(storeId: string): Promise<KitchenTicketDto[]> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/active`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/active`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -88,7 +87,7 @@ export const kdsService = {
    * Lấy chi tiết vé KDS
    */
   async getTicketById(storeId: string, ticketId: string): Promise<KitchenTicketDto> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/tickets/${ticketId}`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/tickets/${ticketId}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -103,7 +102,7 @@ export const kdsService = {
    * Bắt đầu pha chế vé KDS
    */
   async startPreparation(storeId: string, ticketId: string): Promise<KitchenTicketDto> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/tickets/${ticketId}/start`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/tickets/${ticketId}/start`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -118,7 +117,7 @@ export const kdsService = {
    * Toggle hoàn thành món đơn lẻ
    */
   async toggleItemPrepared(storeId: string, ticketId: string, itemId: string): Promise<KitchenTicketDto> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/tickets/${ticketId}/items/${itemId}/toggle`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/tickets/${ticketId}/items/${itemId}/toggle`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -133,7 +132,7 @@ export const kdsService = {
    * Toggle topping / modifier
    */
   async toggleModifierChecked(storeId: string, ticketId: string, modifierId: string): Promise<KitchenTicketDto> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/tickets/${ticketId}/modifiers/${modifierId}/toggle`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/tickets/${ticketId}/modifiers/${modifierId}/toggle`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -148,7 +147,7 @@ export const kdsService = {
    * Đánh dấu pha chế xong (Ready)
    */
   async markReady(storeId: string, ticketId: string): Promise<KitchenTicketDto> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/tickets/${ticketId}/ready`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/tickets/${ticketId}/ready`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -163,7 +162,7 @@ export const kdsService = {
    * Trả đồ cho khách (Completed)
    */
   async completeTicket(storeId: string, ticketId: string): Promise<KitchenTicketDto> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/tickets/${ticketId}/complete`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/tickets/${ticketId}/complete`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -178,7 +177,7 @@ export const kdsService = {
    * Hủy vé pha chế
    */
   async cancelTicket(storeId: string, ticketId: string, reason: string): Promise<KitchenTicketDto> {
-    const res = await fetch(`${API_BASE_URL}/api/stores/${storeId}/kds/tickets/${ticketId}/cancel`, {
+    const res = await fetch(`${API_BASE}/stores/${storeId}/kds/tickets/${ticketId}/cancel`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ reason }),

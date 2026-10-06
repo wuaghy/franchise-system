@@ -87,8 +87,7 @@ export interface CheckoutResponse {
   createdAt: string;
   deductedIngredients: DeductedIngredient[];
 }
-
-const API_BASE = '/api';
+import { API_BASE } from '../config/api.ts';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {

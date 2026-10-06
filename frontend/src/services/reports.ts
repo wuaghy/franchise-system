@@ -4,8 +4,7 @@
  */
 
 import { getTokenFromLocalStorage } from './auth.ts';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE } from '../config/api.ts';
 
 function getAuthHeaders(): HeadersInit {
   const token = getTokenFromLocalStorage();
@@ -148,7 +147,7 @@ export const reportsService = {
     if (fromDate) params.append('fromDate', fromDate);
     if (toDate) params.append('toDate', toDate);
 
-    const res = await fetch(`${API_BASE_URL}/api/reports/stores/${storeId}/summary?${params.toString()}`, {
+    const res = await fetch(`${API_BASE}/reports/stores/${storeId}/summary?${params.toString()}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -166,7 +165,7 @@ export const reportsService = {
     const params = new URLSearchParams();
     if (date) params.append('date', date);
 
-    const res = await fetch(`${API_BASE_URL}/api/reports/stores/${storeId}/hourly-heatmap?${params.toString()}`, {
+    const res = await fetch(`${API_BASE}/reports/stores/${storeId}/hourly-heatmap?${params.toString()}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -186,7 +185,7 @@ export const reportsService = {
     if (toDate) params.append('toDate', toDate);
     params.append('top', top.toString());
 
-    const res = await fetch(`${API_BASE_URL}/api/reports/stores/${storeId}/products?${params.toString()}`, {
+    const res = await fetch(`${API_BASE}/reports/stores/${storeId}/products?${params.toString()}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -205,7 +204,7 @@ export const reportsService = {
     if (fromDate) params.append('fromDate', fromDate);
     if (toDate) params.append('toDate', toDate);
 
-    const res = await fetch(`${API_BASE_URL}/api/reports/network/overview?${params.toString()}`, {
+    const res = await fetch(`${API_BASE}/reports/network/overview?${params.toString()}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -225,7 +224,7 @@ export const reportsService = {
     if (year) params.append('year', year.toString());
     if (month) params.append('month', month.toString());
 
-    const res = await fetch(`${API_BASE_URL}/api/royalty/invoices?${params.toString()}`, {
+    const res = await fetch(`${API_BASE}/royalty/invoices?${params.toString()}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -240,7 +239,7 @@ export const reportsService = {
    * Lấy chi tiết hóa đơn phí nhượng quyền
    */
   async getRoyaltyInvoiceById(invoiceId: string): Promise<RoyaltyInvoiceDto> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/invoices/${invoiceId}`, {
+    const res = await fetch(`${API_BASE}/royalty/invoices/${invoiceId}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -255,7 +254,7 @@ export const reportsService = {
    * Tạo hóa đơn tính phí nhượng quyền cho một chi nhánh
    */
   async generateRoyaltyInvoice(request: GenerateRoyaltyInvoiceRequest): Promise<RoyaltyInvoiceDto> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/invoices/generate`, {
+    const res = await fetch(`${API_BASE}/royalty/invoices/generate`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(request),
@@ -271,7 +270,7 @@ export const reportsService = {
    * Tự động sinh hóa đơn cho toàn mạng lưới
    */
   async generateNetworkRoyaltyInvoices(year: number, month: number): Promise<RoyaltyInvoiceDto[]> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/invoices/generate-network?year=${year}&month=${month}`, {
+    const res = await fetch(`${API_BASE}/royalty/invoices/generate-network?year=${year}&month=${month}`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -286,7 +285,7 @@ export const reportsService = {
    * Phát hành hóa đơn
    */
   async issueRoyaltyInvoice(invoiceId: string): Promise<RoyaltyInvoiceDto> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/invoices/${invoiceId}/issue`, {
+    const res = await fetch(`${API_BASE}/royalty/invoices/${invoiceId}/issue`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -301,7 +300,7 @@ export const reportsService = {
    * Xác nhận thanh toán hóa đơn
    */
   async payRoyaltyInvoice(invoiceId: string, request: PayRoyaltyInvoiceRequest): Promise<RoyaltyInvoiceDto> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/invoices/${invoiceId}/pay`, {
+    const res = await fetch(`${API_BASE}/royalty/invoices/${invoiceId}/pay`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(request),
@@ -317,7 +316,7 @@ export const reportsService = {
    * Hủy hóa đơn
    */
   async cancelRoyaltyInvoice(invoiceId: string, request: CancelRoyaltyInvoiceRequest): Promise<RoyaltyInvoiceDto> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/invoices/${invoiceId}/cancel`, {
+    const res = await fetch(`${API_BASE}/royalty/invoices/${invoiceId}/cancel`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(request),
@@ -333,7 +332,7 @@ export const reportsService = {
    * Lấy cấu hình phí chi nhánh
    */
   async getStoreRoyaltySetting(storeId: string): Promise<StoreRoyaltySettingDto> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/settings/${storeId}`, {
+    const res = await fetch(`${API_BASE}/royalty/settings/${storeId}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -348,7 +347,7 @@ export const reportsService = {
    * Cập nhật cấu hình phí chi nhánh
    */
   async updateStoreRoyaltySetting(storeId: string, request: UpdateStoreRoyaltySettingRequest): Promise<StoreRoyaltySettingDto> {
-    const res = await fetch(`${API_BASE_URL}/api/royalty/settings/${storeId}`, {
+    const res = await fetch(`${API_BASE}/royalty/settings/${storeId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(request),
