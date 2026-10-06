@@ -40,6 +40,8 @@ public static class DependencyInjection
 
         services.AddScoped<Franchise.Application.Common.Interfaces.ICacheService, Services.DistributedCacheService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IOfflineOrderSyncService, Services.OfflineOrderSyncService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.IEmailService, Services.SmtpEmailService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.IVietQrService, Services.VietQrService>();
         services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;

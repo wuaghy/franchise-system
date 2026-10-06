@@ -152,4 +152,23 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+
+  // VietQR Dynamic Generator
+  async getVietQr(amount: number, orderCode: string, note?: string): Promise<{
+    qrUrl: string;
+    bankCode: string;
+    accountNumber: string;
+    accountName: string;
+    amount: number;
+    orderCode: string;
+    transferNote: string;
+  }> {
+    const params = new URLSearchParams({
+      amount: String(amount),
+      orderCode,
+    });
+    if (note) params.append('note', note);
+    return fetchJson(`${API_BASE}/payments/vietqr?${params.toString()}`);
+  },
 };
+

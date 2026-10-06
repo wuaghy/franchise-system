@@ -72,4 +72,40 @@ public class AuthController : ControllerBase
         var user = await _authService.GetCurrentUserAsync(_currentUserService.UserId.Value, ct);
         return Ok(user);
     }
+
+    /// <summary>
+    /// Đăng nhập bằng Google OAuth 2.0 Identity Token (một chạm).
+    /// </summary>
+    [HttpPost("google")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request, CancellationToken ct)
+    {
+        var response = await _authService.GoogleLoginAsync(request, ct);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Phát mã xác thực OTP 6 số qua Gmail SMTP.
+    /// </summary>
+    [HttpPost("send-otp")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request, CancellationToken ct)
+    {
+        var success = await _authService.SendOtpAsync(request, ct);
+        return Ok(new { success, message = "Đã gửi mã OTP đến email của bạn. Vui lòng kiểm tra hòm thư." });
+    }
+
+    /// <summary>
+    /// Xác thực mã OTP và đăng nhập vào hệ thống.
+    /// </summary>
+    [HttpPost("verify-otp")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request, CancellationToken ct)
+    {
+        var response = await _authService.VerifyOtpLoginAsync(request, ct);
+        return Ok(response);
+    }
 }

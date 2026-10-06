@@ -46,10 +46,19 @@ import {
   Truck,
   Coffee,
   BarChart3,
+  Mail,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { realtimeHub, type ConnectionStatus, type LowStockAlertNotification } from "./services/signalr.ts";
-import { getCurrentUser, login as apiLogin, logout as apiLogout, type User } from "./services/auth.ts";
+import {
+  getCurrentUser,
+  login as apiLogin,
+  logout as apiLogout,
+  googleLogin,
+  sendOtp,
+  verifyOtpLogin,
+  type User,
+} from "./services/auth.ts";
 import { costingApi, type ProductCosting, type IngredientItem } from "./services/costing.ts";
 import { TransfersHubScreen } from "./components/TransfersHubScreen.tsx";
 import { KdsScreen } from "./components/KdsScreen.tsx";
@@ -1429,6 +1438,52 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
               </button>
             ))}
           </div>
+
+          {payment === "QR Transfer" && total > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-3 overflow-hidden rounded-2xl border border-red-200 bg-gradient-to-b from-red-50/70 to-white p-3 shadow-sm"
+            >
+              <div className="flex items-center justify-between border-b border-red-100 pb-2">
+                <span className="flex items-center gap-1.5 text-xs font-black text-red-900">
+                  <QrCode size={15} className="text-red-700" /> VietQR Napas 247
+                </span>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-800">
+                  Khớp lệnh tức thì
+                </span>
+              </div>
+              <div className="my-2.5 flex flex-col items-center">
+                <div className="relative rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
+                  <img
+                    src={`https://img.vietqr.io/image/vietinbank-100878137043-compact2.png?amount=${total}&addInfo=ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}&accountName=NGUYEN%20QUANG%20HUY`}
+                    alt="VietQR VietinBank Payment"
+                    className="size-44 object-contain"
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">Quét qua App Ngân hàng hoặc Ví MoMo</p>
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-white p-2.5 text-[11px] shadow-xs">
+                <div className="flex justify-between">
+                  <span className="font-medium text-slate-400">Ngân hàng:</span>
+                  <span className="font-bold text-slate-800">VietinBank (ICB)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-slate-400">Số tài khoản:</span>
+                  <span className="font-mono font-black text-red-700">100878137043</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-slate-400">Chủ tài khoản:</span>
+                  <span className="font-bold uppercase text-slate-800">NGUYEN QUANG HUY</span>
+                </div>
+                <div className="flex justify-between border-t border-dashed border-slate-100 pt-1">
+                  <span className="font-medium text-slate-400">Số tiền thanh toán:</span>
+                  <span className="font-mono font-black text-emerald-700">{total.toLocaleString("vi-VN")} đ</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           <Button variant="primary" disabled={!cart.length} onClick={handlePay} className="w-full !min-h-13 text-xs tracking-wide">
             <ShieldCheck size={18} /> {isOnline ? "Pay & deduct inventory" : "Lưu đơn ngoại tuyến (Offline)"} <span className="ml-auto rounded-md bg-white/15 px-1.5 py-0.5 font-mono">F9</span>
           </Button>
@@ -1482,10 +1537,22 @@ function LoginModal({
   onClose: () => void;
   onSuccess: (user: User) => void;
 }) {
+  const [tab, setTab] = useState<"password" | "otp">("password");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   const handleSubmit = async (e?: React.FormEvent, customUser?: string, customPass?: string) => {
     if (e) e.preventDefault();
@@ -1497,12 +1564,78 @@ function LoginModal({
     }
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
     try {
       const res = await apiLogin({ username: u, password: p });
       onSuccess(res.user);
       onClose();
     } catch (err: any) {
       setError(err.message || "Đăng nhập thất bại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendOtp = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      setError("Vui lòng nhập địa chỉ email hợp lệ để nhận mã OTP.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      await sendOtp(trimmedEmail);
+      setOtpSent(true);
+      setCountdown(60);
+      setSuccessMsg(`Mã OTP đã được gửi đến ${trimmedEmail}. Vui lòng kiểm tra hộp thư!`);
+    } catch (err: any) {
+      setError(err.message || "Không thể gửi mã OTP. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedEmail = email.trim();
+    const trimmedOtp = otpCode.trim();
+    if (!trimmedEmail || !trimmedOtp) {
+      setError("Vui lòng nhập email và mã OTP 6 chữ số.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const res = await verifyOtpLogin(trimmedEmail, trimmedOtp);
+      onSuccess(res.user);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Xác thực OTP không thành công hoặc mã đã hết hạn.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setSuccessMsg(null);
+    const gWindow = window as any;
+    if (gWindow.google?.accounts?.id) {
+      gWindow.google.accounts.id.prompt();
+      return;
+    }
+    const token = prompt("Nhập Google ID Token (hoặc nhấn OK để đăng nhập tài khoản Google mẫu):");
+    if (token === null) return;
+    setLoading(true);
+    try {
+      const res = await googleLogin(token || "demo-google-token");
+      onSuccess(res.user);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Đăng nhập Google thất bại.");
     } finally {
       setLoading(false);
     }
@@ -1531,7 +1664,36 @@ function LoginModal({
         </Button>
       </div>
 
-      <form onSubmit={(e) => handleSubmit(e)} className="space-y-4 p-6">
+      <div className="flex border-b border-slate-100 bg-slate-50/50 p-2">
+        <button
+          type="button"
+          onClick={() => {
+            setTab("password");
+            setError(null);
+            setSuccessMsg(null);
+          }}
+          className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
+            tab === "password" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Mật khẩu
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setTab("otp");
+            setError(null);
+            setSuccessMsg(null);
+          }}
+          className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
+            tab === "otp" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Mã OTP Email
+        </button>
+      </div>
+
+      <div className="space-y-4 p-6">
         {error && (
           <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
             <AlertTriangle size={16} className="shrink-0" />
@@ -1539,34 +1701,130 @@ function LoginModal({
           </div>
         )}
 
-        <div>
-          <label className="mb-1 block text-xs font-extrabold text-slate-700">Tên đăng nhập (Username)</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="admin / cashier_q1"
-            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
-            required
-          />
-        </div>
+        {successMsg && (
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+            <CheckCircle2 size={16} className="shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
 
-        <div>
-          <label className="mb-1 block text-xs font-extrabold text-slate-700">Mật khẩu (Password)</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
-            required
-          />
-        </div>
+        {tab === "password" ? (
+          <form onSubmit={(e) => handleSubmit(e)} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-extrabold text-slate-700">Tên đăng nhập (Username)</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="admin / cashier_q1"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
+                required
+              />
+            </div>
 
-        <Button variant="primary" type="submit" disabled={loading} className="w-full !min-h-11">
-          {loading ? <RefreshCcw size={16} className="animate-spin" /> : <KeyRound size={16} />}
-          <span>{loading ? "Đang xác thực..." : "Đăng nhập nhận ca"}</span>
-        </Button>
+            <div>
+              <label className="mb-1 block text-xs font-extrabold text-slate-700">Mật khẩu (Password)</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
+                required
+              />
+            </div>
+
+            <Button variant="primary" type="submit" disabled={loading} className="w-full !min-h-11">
+              {loading ? <RefreshCcw size={16} className="animate-spin" /> : <KeyRound size={16} />}
+              <span>{loading ? "Đang xác thực..." : "Đăng nhập nhận ca"}</span>
+            </Button>
+
+            <div className="pt-2">
+              <div className="relative flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200" />
+                </div>
+                <span className="relative bg-white px-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                  Tài khoản Demo nhanh
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => quickLogin("admin", "Admin123!")}
+                  className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-red-400 hover:bg-red-50"
+                >
+                  <span className="text-[10px] font-black text-red-800">HQ Admin</span>
+                  <span className="font-mono text-[9px] text-slate-400">admin</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => quickLogin("manager_q1", "Manager123!")}
+                  className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-blue-400 hover:bg-blue-50"
+                >
+                  <span className="text-[10px] font-black text-blue-800">Manager Q1</span>
+                  <span className="font-mono text-[9px] text-slate-400">manager_q1</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => quickLogin("cashier_q1", "Cashier123!")}
+                  className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-emerald-400 hover:bg-emerald-50"
+                >
+                  <span className="text-[10px] font-black text-emerald-800">Cashier Q1</span>
+                  <span className="font-mono text-[9px] text-slate-400">cashier_q1</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-extrabold text-slate-700">Email nhận OTP</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 grid w-10 place-items-center text-slate-400">
+                    <Mail size={16} />
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="nguyenquanghuy14022005@gmail.com"
+                    className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
+                    required
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={loading || countdown > 0}
+                  className="shrink-0 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {countdown > 0 ? `${countdown}s` : otpSent ? "Gửi lại" : "Gửi OTP"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-extrabold text-slate-700">Mã OTP (6 chữ số)</label>
+              <input
+                type="text"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                className="w-full tracking-widest text-center font-mono text-lg font-bold rounded-xl border border-slate-200 px-3.5 py-2 outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
+                required
+              />
+            </div>
+
+            <Button variant="primary" type="submit" disabled={loading} className="w-full !min-h-11">
+              {loading ? <RefreshCcw size={16} className="animate-spin" /> : <KeyRound size={16} />}
+              <span>{loading ? "Đang xác thực..." : "Xác nhận OTP & Đăng nhập"}</span>
+            </Button>
+          </form>
+        )}
 
         <div className="pt-2">
           <div className="relative flex items-center justify-center">
@@ -1574,38 +1832,38 @@ function LoginModal({
               <div className="w-full border-t border-slate-200" />
             </div>
             <span className="relative bg-white px-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-              Tài khoản Demo nhanh
+              Hoặc tiếp tục với
             </span>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => quickLogin("admin", "Admin123!")}
-              className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-red-400 hover:bg-red-50"
-            >
-              <span className="text-[10px] font-black text-red-800">HQ Admin</span>
-              <span className="font-mono text-[9px] text-slate-400">admin</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => quickLogin("manager_q1", "Manager123!")}
-              className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-blue-400 hover:bg-blue-50"
-            >
-              <span className="text-[10px] font-black text-blue-800">Manager Q1</span>
-              <span className="font-mono text-[9px] text-slate-400">manager_q1</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => quickLogin("cashier_q1", "Cashier123!")}
-              className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-emerald-400 hover:bg-emerald-50"
-            >
-              <span className="text-[10px] font-black text-emerald-800">Cashier Q1</span>
-              <span className="font-mono text-[9px] text-slate-400">cashier_q1</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-700 shadow-xs transition hover:bg-slate-50 hover:border-slate-300 active:scale-[0.99]"
+          >
+            <svg className="size-4" viewBox="0 0 24 24">
+              <path
+                fill="#4285F4"
+                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+              />
+            </svg>
+            <span>Đăng nhập với Google</span>
+          </button>
         </div>
-      </form>
+      </div>
     </ModalShell>
   );
 }

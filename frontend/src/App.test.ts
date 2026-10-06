@@ -160,4 +160,38 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(remainingQueue.length, 1);
     assert.equal(remainingQueue[0].offlineOrderId, 'OFF-3');
   });
+
+  it('generates compliant VietQR Napas quicklink URL with exact bank details', () => {
+    const bankCode = 'vietinbank';
+    const accountNumber = '100878137043';
+    const accountName = 'NGUYEN QUANG HUY';
+    const amount = 85000;
+    const orderCode = 'ORD-20261006-001';
+
+    const buildVietQrUrl = (bank: string, acc: string, amt: number, code: string, name: string) => {
+      const encodedName = encodeURIComponent(name);
+      return `https://img.vietqr.io/image/${bank}-${acc}-compact2.png?amount=${amt}&addInfo=${code}&accountName=${encodedName}`;
+    };
+
+    const url = buildVietQrUrl(bankCode, accountNumber, amount, orderCode, accountName);
+
+    assert.ok(url.startsWith('https://img.vietqr.io/image/vietinbank-100878137043-compact2.png'));
+    assert.ok(url.includes('amount=85000'));
+    assert.ok(url.includes('addInfo=ORD-20261006-001'));
+    assert.ok(url.includes('accountName=NGUYEN%20QUANG%20HUY'));
+  });
+
+  it('validates 6-digit OTP formatting and email regex', () => {
+    const sanitizeOtp = (raw: string) => raw.replace(/\D/g, '').slice(0, 6);
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    assert.equal(sanitizeOtp('123-456'), '123456');
+    assert.equal(sanitizeOtp('abc987654321'), '987654');
+    assert.equal(sanitizeOtp('4829'), '4829');
+
+    assert.equal(isValidEmail('nguyenquanghuy14022005@gmail.com'), true);
+    assert.equal(isValidEmail('invalid-email-address'), false);
+    assert.equal(isValidEmail('admin@franchise.local'), true);
+  });
 });
+

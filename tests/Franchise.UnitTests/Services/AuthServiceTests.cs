@@ -42,10 +42,15 @@ public class AuthServiceTests
 
         var passwordHasher = new PasswordHasher();
         var jwtTokenGenerator = new JwtTokenGenerator(configuration);
+        var mockEmail = new Mock<IEmailService>();
+        var mockCache = new Mock<ICacheService>();
         var authService = new AuthService(
             context,
             passwordHasher,
             jwtTokenGenerator,
+            mockEmail.Object,
+            mockCache.Object,
+            configuration,
             NullLogger<AuthService>.Instance,
             currentUserService);
 
@@ -349,5 +354,120 @@ public class AuthServiceTests
         var act = async () => await authService.RegisterAsync(request);
         var ex = await act.Should().ThrowAsync<ForbiddenException>();
         ex.Which.ErrorCode.Should().Be("FORBIDDEN");
+    }
+
+    [Fact]
+    public async Task SendOtpAsync_ShouldCacheCodeAndCallEmailService()
+    {
+        // Arrange
+        var context = CreateInMemoryDbContext();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "Jwt:Secret", "A_Very_Long_And_Secure_Secret_Key_For_Testing_1234567890" }
+            })
+            .Build();
+
+        var mockEmail = new Mock<IEmailService>();
+        var mockCache = new Mock<ICacheService>();
+
+        var authService = new AuthService(
+            context,
+            new PasswordHasher(),
+            new JwtTokenGenerator(configuration),
+            mockEmail.Object,
+            mockCache.Object,
+            configuration,
+            NullLogger<AuthService>.Instance);
+
+        var request = new SendOtpRequest("user@franchise.vn");
+
+        // Act
+        var result = await authService.SendOtpAsync(request);
+
+        // Assert
+        result.Should().BeTrue();
+        mockCache.Verify(c => c.SetAsync(
+            "otp:user@franchise.vn",
+            It.Is<string>(code => code.Length == 6),
+            It.IsAny<TimeSpan?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        mockEmail.Verify(e => e.SendOtpEmailAsync(
+            "user@franchise.vn",
+            It.Is<string>(code => code.Length == 6),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyOtpLoginAsync_WithValidOtp_ShouldReturnTokens()
+    {
+        // Arrange
+        var context = CreateInMemoryDbContext();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "Jwt:Secret", "A_Very_Long_And_Secure_Secret_Key_For_Testing_1234567890" }
+            })
+            .Build();
+
+        var mockEmail = new Mock<IEmailService>();
+        var mockCache = new Mock<ICacheService>();
+        mockCache.Setup(c => c.GetAsync<string>("otp:user@franchise.vn", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("123456");
+
+        var authService = new AuthService(
+            context,
+            new PasswordHasher(),
+            new JwtTokenGenerator(configuration),
+            mockEmail.Object,
+            mockCache.Object,
+            configuration,
+            NullLogger<AuthService>.Instance);
+
+        var request = new VerifyOtpRequest("user@franchise.vn", "123456");
+
+        // Act
+        var result = await authService.VerifyOtpLoginAsync(request);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.AccessToken.Should().NotBeNullOrWhiteSpace();
+        result.User.Email.Should().Be("user@franchise.vn");
+        mockCache.Verify(c => c.RemoveAsync("otp:user@franchise.vn", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyOtpLoginAsync_WithInvalidOtp_ShouldThrowUnauthorizedException()
+    {
+        // Arrange
+        var context = CreateInMemoryDbContext();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "Jwt:Secret", "A_Very_Long_And_Secure_Secret_Key_For_Testing_1234567890" }
+            })
+            .Build();
+
+        var mockEmail = new Mock<IEmailService>();
+        var mockCache = new Mock<ICacheService>();
+        mockCache.Setup(c => c.GetAsync<string>("otp:user@franchise.vn", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("999999");
+
+        var authService = new AuthService(
+            context,
+            new PasswordHasher(),
+            new JwtTokenGenerator(configuration),
+            mockEmail.Object,
+            mockCache.Object,
+            configuration,
+            NullLogger<AuthService>.Instance);
+
+        var request = new VerifyOtpRequest("user@franchise.vn", "123456");
+
+        // Act & Assert
+        var act = async () => await authService.VerifyOtpLoginAsync(request);
+        var ex = await act.Should().ThrowAsync<UnauthorizedException>();
+        ex.Which.ErrorCode.Should().Be("INVALID_OTP");
     }
 }

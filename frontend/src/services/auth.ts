@@ -80,3 +80,71 @@ export function logout(): void {
   clearAuthData();
   window.location.reload();
 }
+
+export async function googleLogin(idToken: string, storeId?: string): Promise<AuthResponse> {
+  const response = await fetch('/api/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken, storeId }),
+  });
+
+  if (!response.ok) {
+    let errorMsg = 'Đăng nhập Google thất bại';
+    try {
+      const err = await response.json();
+      errorMsg = err.detail || err.title || errorMsg;
+    } catch {
+      errorMsg = await response.text();
+    }
+    throw new Error(errorMsg);
+  }
+
+  const data = (await response.json()) as AuthResponse;
+  saveAuthData(data);
+  return data;
+}
+
+export async function sendOtp(email: string): Promise<boolean> {
+  const response = await fetch('/api/auth/send-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    let errorMsg = 'Không thể gửi mã OTP';
+    try {
+      const err = await response.json();
+      errorMsg = err.detail || err.title || errorMsg;
+    } catch {
+      errorMsg = await response.text();
+    }
+    throw new Error(errorMsg);
+  }
+
+  return true;
+}
+
+export async function verifyOtpLogin(email: string, otpCode: string): Promise<AuthResponse> {
+  const response = await fetch('/api/auth/verify-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otpCode }),
+  });
+
+  if (!response.ok) {
+    let errorMsg = 'Xác thực OTP thất bại';
+    try {
+      const err = await response.json();
+      errorMsg = err.detail || err.title || errorMsg;
+    } catch {
+      errorMsg = await response.text();
+    }
+    throw new Error(errorMsg);
+  }
+
+  const data = (await response.json()) as AuthResponse;
+  saveAuthData(data);
+  return data;
+}
+

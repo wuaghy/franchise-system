@@ -42,3 +42,18 @@ public record UserDto(
     Guid? FranchiseeId,
     bool IsActive
 );
+
+public record GoogleLoginRequest(
+    string IdToken,
+    Guid? StoreId = null
+);
+
+public record SendOtpRequest(
+    string Email
+);
+
+public record VerifyOtpRequest(
+    string Email,
+    string OtpCode
+);
+

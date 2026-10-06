@@ -9,4 +9,7 @@ public interface IAuthService
     Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken ct = default);
     Task<bool> RevokeTokenAsync(RevokeTokenRequest request, CancellationToken ct = default);
     Task<UserDto> GetCurrentUserAsync(Guid userId, CancellationToken ct = default);
+    Task<AuthResponse> GoogleLoginAsync(GoogleLoginRequest request, CancellationToken ct = default);
+    Task<bool> SendOtpAsync(SendOtpRequest request, CancellationToken ct = default);
+    Task<AuthResponse> VerifyOtpLoginAsync(VerifyOtpRequest request, CancellationToken ct = default);
 }
