@@ -45,6 +45,7 @@ import {
   RotateCcw,
   Truck,
   Coffee,
+  BarChart3,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { realtimeHub, type ConnectionStatus, type LowStockAlertNotification } from "./services/signalr.ts";
@@ -52,8 +53,9 @@ import { getCurrentUser, login as apiLogin, logout as apiLogout, type User } fro
 import { costingApi, type ProductCosting, type IngredientItem } from "./services/costing.ts";
 import { TransfersHubScreen } from "./components/TransfersHubScreen.tsx";
 import { KdsScreen } from "./components/KdsScreen.tsx";
+import { AnalyticsHubScreen } from "./components/AnalyticsHubScreen.tsx";
 
-type Screen = "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds";
+type Screen = "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics";
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
 
@@ -116,6 +118,7 @@ const navItems = [
   { id: "bom-studio" as Screen, label: "BoM Studio", sub: "COGS & Lợi nhuận", icon: Sparkles },
   { id: "pos" as Screen, label: "POS Terminal", sub: "Bán hàng", icon: LayoutGrid },
   { id: "kds" as Screen, label: "Kitchen Display", sub: "Barista KDS", icon: Coffee },
+  { id: "analytics" as Screen, label: "Business Intelligence", sub: "Báo cáo & Phí HQ", icon: BarChart3 },
 ];
 
 function Header({
@@ -1748,6 +1751,7 @@ export default function App() {
         {screen === "bom-studio" && <BomStudioScreen />}
         {screen === "pos" && <PosScreen openModal={setModal} />}
         {screen === "kds" && <KdsScreen currentUser={currentUser} />}
+        {screen === "analytics" && <AnalyticsHubScreen currentUser={currentUser} />}
       </div>
       <AnimatePresence>
         {modal && (

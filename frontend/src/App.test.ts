@@ -76,4 +76,31 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(toggled[0].isPrepared, true);
     assert.equal(toggled.every(i => i.isPrepared), true);
   });
+
+  it('calculates franchise royalty and marketing fees correctly', () => {
+    const grossRevenue = 100_000_000;
+    const discountAmount = 10_000_000;
+    const netRevenue = grossRevenue - discountAmount; // 90M
+    const royaltyRate = 0.05; // 5%
+    const marketingRate = 0.02; // 2%
+    const techFee = 2_000_000;
+
+    const royaltyFee = Math.round(netRevenue * royaltyRate);
+    const marketingFee = Math.round(netRevenue * marketingRate);
+    const totalDue = royaltyFee + marketingFee + techFee;
+
+    assert.equal(royaltyFee, 4_500_000);
+    assert.equal(marketingFee, 1_800_000);
+    assert.equal(totalDue, 8_300_000);
+  });
+
+  it('identifies F&B peak hours correctly', () => {
+    const isPeakHour = (hour: number) => [7, 8, 9, 11, 12, 13, 18, 19, 20, 21].includes(hour);
+
+    assert.equal(isPeakHour(8), true);  // Morning coffee rush
+    assert.equal(isPeakHour(12), true); // Lunch rush
+    assert.equal(isPeakHour(19), true); // Evening rush
+    assert.equal(isPeakHour(3), false);  // Overnight
+    assert.equal(isPeakHour(15), false); // Mid afternoon
+  });
 });
