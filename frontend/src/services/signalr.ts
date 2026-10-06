@@ -1,5 +1,6 @@
 import * as signalR from '@microsoft/signalr';
 import { getTokenFromLocalStorage } from './auth.ts';
+import type { KitchenTicketDto, KitchenTicketStatusChangedNotification, KitchenTicketItemToggledNotification } from './kds.ts';
 
 export interface OrderCompletedNotification {
   orderId: string;
@@ -38,6 +39,9 @@ class SignalRService {
   private orderCompletedListeners: ((data: OrderCompletedNotification) => void)[] = [];
   private inventoryUpdatedListeners: ((data: InventoryUpdatedNotification[]) => void)[] = [];
   private lowStockAlertListeners: ((data: LowStockAlertNotification) => void)[] = [];
+  private kitchenTicketCreatedListeners: ((ticket: KitchenTicketDto) => void)[] = [];
+  private kitchenTicketStatusChangedListeners: ((data: KitchenTicketStatusChangedNotification) => void)[] = [];
+  private kitchenTicketItemToggledListeners: ((data: KitchenTicketItemToggledNotification) => void)[] = [];
 
   constructor() {
     this.initConnection();
@@ -81,6 +85,18 @@ class SignalRService {
 
     this.connection.on('ReceiveLowStockAlert', (data: LowStockAlertNotification) => {
       this.lowStockAlertListeners.forEach((fn) => fn(data));
+    });
+
+    this.connection.on('ReceiveKitchenTicketCreated', (ticket: KitchenTicketDto) => {
+      this.kitchenTicketCreatedListeners.forEach((fn) => fn(ticket));
+    });
+
+    this.connection.on('ReceiveKitchenTicketStatusChanged', (data: KitchenTicketStatusChangedNotification) => {
+      this.kitchenTicketStatusChangedListeners.forEach((fn) => fn(data));
+    });
+
+    this.connection.on('ReceiveKitchenTicketItemToggled', (data: KitchenTicketItemToggledNotification) => {
+      this.kitchenTicketItemToggledListeners.forEach((fn) => fn(data));
     });
   }
 
@@ -157,6 +173,27 @@ class SignalRService {
     this.lowStockAlertListeners.push(callback);
     return () => {
       this.lowStockAlertListeners = this.lowStockAlertListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onKitchenTicketCreated(callback: (ticket: KitchenTicketDto) => void): () => void {
+    this.kitchenTicketCreatedListeners.push(callback);
+    return () => {
+      this.kitchenTicketCreatedListeners = this.kitchenTicketCreatedListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onKitchenTicketStatusChanged(callback: (data: KitchenTicketStatusChangedNotification) => void): () => void {
+    this.kitchenTicketStatusChangedListeners.push(callback);
+    return () => {
+      this.kitchenTicketStatusChangedListeners = this.kitchenTicketStatusChangedListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onKitchenTicketItemToggled(callback: (data: KitchenTicketItemToggledNotification) => void): () => void {
+    this.kitchenTicketItemToggledListeners.push(callback);
+    return () => {
+      this.kitchenTicketItemToggledListeners = this.kitchenTicketItemToggledListeners.filter((fn) => fn !== callback);
     };
   }
 
