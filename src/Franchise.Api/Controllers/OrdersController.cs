@@ -1,9 +1,11 @@
 using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Orders;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Franchise.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/orders")]
 [Produces("application/json")]

@@ -17,15 +17,18 @@ public class OrderService : IOrderService
     private readonly AppDbContext _context;
     private readonly IInventoryService _inventoryService;
     private readonly ILogger<OrderService> _logger;
+    private readonly ICurrentUserService? _currentUserService;
 
     public OrderService(
         AppDbContext context,
         IInventoryService inventoryService,
-        ILogger<OrderService> logger)
+        ILogger<OrderService> logger,
+        ICurrentUserService? currentUserService = null)
     {
         _context = context;
         _inventoryService = inventoryService;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     public async Task<CheckoutOrderResponse> CheckoutAsync(
@@ -85,6 +88,16 @@ public class OrderService : IOrderService
         if (!storeExists)
         {
             throw new NotFoundException("STORE_NOT_FOUND", $"Không tìm thấy chi nhánh với ID '{request.StoreId}'.");
+        }
+
+        // 2.1 Chống gian lận chéo chi nhánh (Cross-Store Fraud Prevention)
+        if (_currentUserService?.UserId.HasValue == true && !_currentUserService.IsSuperAdmin)
+        {
+            if (_currentUserService.StoreId.HasValue && _currentUserService.StoreId.Value != request.StoreId)
+            {
+                throw new ForbiddenException("STORE_ACCESS_DENIED",
+                    $"Tài khoản của bạn chỉ được phép tạo đơn hàng cho chi nhánh '{_currentUserService.StoreId}', không thể tạo đơn cho chi nhánh '{request.StoreId}'.");
+            }
         }
 
         // 3. Chống gian lận giá từ máy POS (Anti price tampering)
@@ -158,7 +171,7 @@ public class OrderService : IOrderService
             OrderNumber = orderNumber,
             StoreId = request.StoreId,
             CustomerId = request.CustomerId,
-            CashierId = request.CashierId,
+            CashierId = request.CashierId ?? _currentUserService?.UserId,
             OrderType = request.OrderType,
             Status = OrderStatus.Completed,
             Subtotal = subtotal,

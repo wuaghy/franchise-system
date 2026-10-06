@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Inventory;
@@ -5,6 +6,7 @@ using Franchise.Domain.Exceptions;
 
 namespace Franchise.Api.Controllers;
 
+[Authorize(Policy = "RequireStoreAccess")]
 [ApiController]
 [Route("api/stores/{storeId:guid}/inventory")]
 [Produces("application/json")]

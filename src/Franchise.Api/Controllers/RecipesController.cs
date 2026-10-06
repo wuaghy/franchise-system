@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Franchise.Infrastructure.Data;
@@ -6,6 +7,7 @@ using Franchise.Application.DTOs.Recipes;
 
 namespace Franchise.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/products/{productId:guid}/recipe")]
 [Produces("application/json")]
@@ -45,6 +47,7 @@ public class RecipesController : ControllerBase
         return Ok(new ProductRecipeResponse(product.Id, product.Sku, product.Name, recipeItems));
     }
 
+    [Authorize(Roles = "HQ_SuperAdmin,Supply_Chain_Officer")]
     [HttpPut]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

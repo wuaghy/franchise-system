@@ -1,6 +1,7 @@
 using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Auth;
 using Franchise.Domain.Entities;
+using Franchise.Domain.Enums;
 using Franchise.Domain.Exceptions;
 using Franchise.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -14,17 +15,20 @@ public class AuthService : IAuthService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly ILogger<AuthService> _logger;
+    private readonly ICurrentUserService? _currentUserService;
 
     public AuthService(
         AppDbContext context,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        ICurrentUserService? currentUserService = null)
     {
         _context = context;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -60,6 +64,37 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
     {
+        // Kiểm tra quyền hạn tạo tài khoản (chống tự phong SuperAdmin ngoài Internet)
+        var hasAnyUsers = await _context.Users.AnyAsync(ct);
+        if (hasAnyUsers)
+        {
+            if (_currentUserService == null || !_currentUserService.UserId.HasValue)
+            {
+                throw new UnauthorizedException("UNAUTHORIZED", "Hệ thống yêu cầu đăng nhập tài khoản quản trị để tạo nhân sự mới.");
+            }
+
+            if (request.Role == UserRole.HQ_SuperAdmin && !_currentUserService.IsSuperAdmin)
+            {
+                throw new ForbiddenException("FORBIDDEN", "Chỉ có HQ SuperAdmin mới có quyền tạo thêm tài khoản quản trị hệ thống.");
+            }
+
+            if (_currentUserService.Role is "Store_Manager")
+            {
+                if (request.Role != UserRole.POS_Cashier || request.StoreId != _currentUserService.StoreId)
+                {
+                    throw new ForbiddenException("FORBIDDEN", "Quản lý cửa hàng chỉ có quyền tạo tài khoản Thu ngân cho chi nhánh của mình.");
+                }
+            }
+            else if (_currentUserService.Role is "POS_Cashier" or "Supply_Chain_Officer")
+            {
+                throw new ForbiddenException("FORBIDDEN", "Bạn không có quyền tạo tài khoản nhân sự.");
+            }
+        }
+        else
+        {
+            _logger.LogWarning("System Bootstrap: Khởi tạo tài khoản ban đầu '{Username}' ({Role}).", request.Username, request.Role);
+        }
+
         var usernameExists = await _context.Users.AnyAsync(u => u.Username == request.Username, ct);
         if (usernameExists)
         {

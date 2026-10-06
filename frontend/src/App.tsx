@@ -35,12 +35,16 @@ import {
   TrendingUp,
   Wifi,
   X,
+  KeyRound,
+  Lock,
+  LogOut,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { realtimeHub, type ConnectionStatus, type LowStockAlertNotification } from "./services/signalr.ts";
+import { getCurrentUser, login as apiLogin, logout as apiLogout, type User } from "./services/auth.ts";
 
 type Screen = "stores" | "inventory" | "pos";
-type Modal = "store" | "restock" | "modifier" | "receipt" | null;
+type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -105,10 +109,16 @@ function Header({
   screen,
   setScreen,
   connectionStatus,
+  currentUser,
+  openLogin,
+  onLogout,
 }: {
   screen: Screen;
   setScreen: (screen: Screen) => void;
   connectionStatus: ConnectionStatus;
+  currentUser: User | null;
+  openLogin: () => void;
+  onLogout: () => void;
 }) {
   const badgeTone = connectionStatus === "Connected" ? "success" : connectionStatus === "Reconnecting" ? "warning" : "neutral";
   const badgeText = connectionStatus === "Connected" ? "Outbox Synced" : connectionStatus === "Reconnecting" ? "Reconnecting..." : "Offline";
@@ -141,6 +151,38 @@ function Header({
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          {currentUser ? (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm">
+              <span className="grid size-7 place-items-center rounded-lg bg-red-800 text-[11px] font-black text-white">
+                {currentUser.username.slice(0, 2).toUpperCase()}
+              </span>
+              <div className="hidden sm:block text-left">
+                <span className="block max-w-28 truncate text-xs font-black text-slate-900 leading-tight">
+                  {currentUser.fullName || currentUser.username}
+                </span>
+                <span className="block text-[9px] font-extrabold uppercase tracking-wider text-red-700 leading-none">
+                  {currentUser.role}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Hết ca / Đăng xuất"
+                className="ml-1 rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={openLogin}
+              className="!h-9 !min-h-9 !px-3 text-xs shadow-md shadow-red-900/10"
+            >
+              <Lock size={14} /> <span className="hidden sm:inline">Nhận ca POS</span>
+            </Button>
+          )}
+
           <Button variant="ghost" className="!size-10 !min-h-10 !p-0" aria-label="Notifications">
             <Bell size={18} />
             <span className="absolute mt-[-18px] ml-[16px] size-2 rounded-full bg-red-600 ring-2 ring-white" />
@@ -777,7 +819,153 @@ function Field({ label, placeholder, error }: { label: string; placeholder: stri
   );
 }
 
-function ModalContent({ modal, close }: { modal: Exclude<Modal, null>; close: () => void }) {
+function LoginModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: (user: User) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e?: React.FormEvent, customUser?: string, customPass?: string) => {
+    if (e) e.preventDefault();
+    const u = (customUser ?? username).trim();
+    const p = customPass ?? password;
+    if (!u || !p) {
+      setError("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiLogin({ username: u, password: p });
+      onSuccess(res.user);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Đăng nhập thất bại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const quickLogin = (u: string, p: string) => {
+    setUsername(u);
+    setPassword(p);
+    handleSubmit(undefined, u, p);
+  };
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="flex items-start justify-between border-b border-slate-100 p-6 pb-4">
+        <div className="flex items-center gap-3">
+          <span className="grid size-11 place-items-center rounded-xl bg-red-100 text-red-800">
+            <Lock size={22} />
+          </span>
+          <div>
+            <h2 className="text-xl font-black text-slate-950">Xác thực ca làm việc POS</h2>
+            <p className="text-xs text-slate-500">Đăng nhập tài khoản nhân sự / quản trị viên</p>
+          </div>
+        </div>
+        <Button variant="ghost" onClick={onClose} className="!size-10 !p-0">
+          <X size={18} />
+        </Button>
+      </div>
+
+      <form onSubmit={(e) => handleSubmit(e)} className="space-y-4 p-6">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div>
+          <label className="mb-1 block text-xs font-extrabold text-slate-700">Tên đăng nhập (Username)</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="admin / cashier_q1"
+            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-extrabold text-slate-700">Mật khẩu (Password)</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
+            required
+          />
+        </div>
+
+        <Button variant="primary" type="submit" disabled={loading} className="w-full !min-h-11">
+          {loading ? <RefreshCcw size={16} className="animate-spin" /> : <KeyRound size={16} />}
+          <span>{loading ? "Đang xác thực..." : "Đăng nhập nhận ca"}</span>
+        </Button>
+
+        <div className="pt-2">
+          <div className="relative flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <span className="relative bg-white px-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+              Tài khoản Demo nhanh
+            </span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => quickLogin("admin", "Admin123!")}
+              className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-red-400 hover:bg-red-50"
+            >
+              <span className="text-[10px] font-black text-red-800">HQ Admin</span>
+              <span className="font-mono text-[9px] text-slate-400">admin</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => quickLogin("manager_q1", "Manager123!")}
+              className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-blue-400 hover:bg-blue-50"
+            >
+              <span className="text-[10px] font-black text-blue-800">Manager Q1</span>
+              <span className="font-mono text-[9px] text-slate-400">manager_q1</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => quickLogin("cashier_q1", "Cashier123!")}
+              className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-emerald-400 hover:bg-emerald-50"
+            >
+              <span className="text-[10px] font-black text-emerald-800">Cashier Q1</span>
+              <span className="font-mono text-[9px] text-slate-400">cashier_q1</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function ModalContent({
+  modal,
+  close,
+  onLoginSuccess,
+}: {
+  modal: Exclude<Modal, null>;
+  close: () => void;
+  onLoginSuccess: (user: User) => void;
+}) {
+  if (modal === "login") {
+    return <LoginModal onClose={close} onSuccess={onLoginSuccess} />;
+  }
   if (modal === "store")
     return (
       <ModalShell side onClose={close}>
@@ -967,6 +1155,7 @@ export default function App() {
   const [dailyRevenue, setDailyRevenue] = useState(318400000);
   const [inventory, setInventory] = useState<InventoryRecord[]>(initialInventory);
   const [activeAlert, setActiveAlert] = useState<LowStockAlertNotification | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
 
   useEffect(() => {
     // 1. Khởi chạy kết nối SignalR Hub
@@ -1015,13 +1204,34 @@ export default function App() {
       <a href="#main-content" className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white focus:translate-y-0">
         Skip to content
       </a>
-      <Header screen={screen} setScreen={setScreen} connectionStatus={connectionStatus} />
+      <Header
+        screen={screen}
+        setScreen={setScreen}
+        connectionStatus={connectionStatus}
+        currentUser={currentUser}
+        openLogin={() => setModal("login")}
+        onLogout={() => {
+          apiLogout();
+          setCurrentUser(null);
+        }}
+      />
       <div id="main-content" aria-label={title}>
         {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
         {screen === "inventory" && <InventoryScreen openModal={setModal} inventory={inventory} activeAlert={activeAlert} />}
         {screen === "pos" && <PosScreen openModal={setModal} />}
       </div>
-      <AnimatePresence>{modal && <ModalContent modal={modal} close={() => setModal(null)} />}</AnimatePresence>
+      <AnimatePresence>
+        {modal && (
+          <ModalContent
+            modal={modal}
+            close={() => setModal(null)}
+            onLoginSuccess={(u) => {
+              setCurrentUser(u);
+              realtimeHub.start();
+            }}
+          />
+        )}
+      </AnimatePresence>
       <div className="pointer-events-none fixed bottom-4 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-[10px] font-bold text-slate-500 shadow-lg backdrop-blur md:flex lg:hidden">
         <Wifi size={12} className={connectionStatus === "Connected" ? "text-emerald-600" : "text-amber-500"} /> Live operations · {connectionStatus}
       </div>

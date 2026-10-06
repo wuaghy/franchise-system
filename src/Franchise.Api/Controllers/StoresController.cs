@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Franchise.Infrastructure.Data;
@@ -7,6 +8,7 @@ using Franchise.Application.Common.Models;
 
 namespace Franchise.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
@@ -117,6 +119,7 @@ public class StoresController : ControllerBase
     /// Tạo mới một chi nhánh cửa hàng
     /// </summary>
     /// <remarks>POST /api/stores</remarks>
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [HttpPost]
     [ProducesResponseType(typeof(StoreResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -192,6 +195,7 @@ public class StoresController : ControllerBase
     /// Cập nhật toàn bộ thông tin chi nhánh (Idempotent)
     /// </summary>
     /// <remarks>PUT /api/stores/{id}</remarks>
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(StoreResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -247,6 +251,7 @@ public class StoresController : ControllerBase
     /// Cập nhật trạng thái hoạt động của chi nhánh
     /// </summary>
     /// <remarks>PATCH /api/stores/{id}/status</remarks>
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [HttpPatch("{id:guid}/status")]
     [ProducesResponseType(typeof(StoreResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -283,6 +288,7 @@ public class StoresController : ControllerBase
     /// Xóa một chi nhánh cửa hàng
     /// </summary>
     /// <remarks>DELETE /api/stores/{id}</remarks>
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

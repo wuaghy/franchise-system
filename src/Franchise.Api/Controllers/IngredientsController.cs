@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Franchise.Infrastructure.Data;
@@ -6,6 +7,7 @@ using Franchise.Application.DTOs.Ingredients;
 
 namespace Franchise.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
@@ -31,6 +33,7 @@ public class IngredientsController : ControllerBase
         return Ok(items);
     }
 
+    [Authorize(Roles = "HQ_SuperAdmin,Supply_Chain_Officer")]
     [HttpPost]
     [ProducesResponseType(typeof(IngredientResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

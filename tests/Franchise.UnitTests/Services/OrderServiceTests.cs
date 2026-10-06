@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Orders;
 using Franchise.Domain.Entities;
 using Franchise.Domain.Enums;
@@ -8,6 +9,7 @@ using Franchise.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace Franchise.UnitTests.Services;
@@ -23,14 +25,15 @@ public class OrderServiceTests
         return new AppDbContext(options);
     }
 
-    private (OrderService orderService, AppDbContext context) CreateOrderService()
+    private (OrderService orderService, AppDbContext context) CreateOrderService(ICurrentUserService? currentUserService = null)
     {
         var context = CreateInMemoryDbContext();
         var inventoryService = new InventoryService(context);
         var orderService = new OrderService(
             context,
             inventoryService,
-            NullLogger<OrderService>.Instance);
+            NullLogger<OrderService>.Instance,
+            currentUserService);
 
         return (orderService, context);
     }
@@ -444,5 +447,91 @@ public class OrderServiceTests
         // Bản ghi IdempotencyRecord được lưu lại
         var record = await context.IdempotencyRecords.FirstOrDefaultAsync(r => r.IdempotencyKey == idempotencyKey);
         record.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task CheckoutAsync_ShouldThrowForbiddenException_WhenCashierOrdersForDifferentStore()
+    {
+        // Arrange
+        var cashierStoreId = Guid.NewGuid();
+        var targetStoreId = Guid.NewGuid();
+        var cashierUserId = Guid.NewGuid();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock.Setup(u => u.UserId).Returns(cashierUserId);
+        currentUserMock.Setup(u => u.Role).Returns("POS_Cashier");
+        currentUserMock.Setup(u => u.IsSuperAdmin).Returns(false);
+        currentUserMock.Setup(u => u.StoreId).Returns(cashierStoreId);
+
+        var (orderService, context) = CreateOrderService(currentUserMock.Object);
+
+        // Tạo cửa hàng hợp lệ trong DB
+        context.Stores.Add(new Store { Id = targetStoreId, Code = "STR-B", Name = "Store B", Address = "Q2" });
+        await context.SaveChangesAsync();
+
+        var request = new CheckoutOrderRequest(
+            StoreId: targetStoreId,
+            CustomerId: null,
+            CashierId: null,
+            OrderType: OrderType.DineIn,
+            PaymentMethod: PaymentMethod.Cash,
+            Items: new List<CreateOrderItemRequest>
+            {
+                new CreateOrderItemRequest(Guid.NewGuid(), 1)
+            }
+        );
+
+        // Act & Assert
+        var act = async () => await orderService.CheckoutAsync(request);
+        var ex = await act.Should().ThrowAsync<ForbiddenException>();
+        ex.Which.ErrorCode.Should().Be("STORE_ACCESS_DENIED");
+    }
+
+    [Fact]
+    public async Task CheckoutAsync_ShouldAutoBindCashierId_WhenCashierIdIsNullInRequest()
+    {
+        // Arrange
+        var storeId = Guid.NewGuid();
+        var cashierUserId = Guid.NewGuid();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock.Setup(u => u.UserId).Returns(cashierUserId);
+        currentUserMock.Setup(u => u.Role).Returns("POS_Cashier");
+        currentUserMock.Setup(u => u.IsSuperAdmin).Returns(false);
+        currentUserMock.Setup(u => u.StoreId).Returns(storeId);
+
+        var (orderService, context) = CreateOrderService(currentUserMock.Object);
+
+        // Setup store, product, inventory
+        context.Stores.Add(new Store { Id = storeId, Code = "STR-A", Name = "Store A", Address = "Q1" });
+        var ing = new Ingredient { Id = Guid.NewGuid(), Code = "ING-1", Name = "Tea", Unit = "g", StandardCost = 100 };
+        var cat = new Category { Id = Guid.NewGuid(), Name = "Drinks" };
+        var prod = new Product { Id = Guid.NewGuid(), CategoryId = cat.Id, Sku = "TEA-01", Name = "Trà Đào", BasePrice = 30000 };
+        context.Categories.Add(cat);
+        context.Ingredients.Add(ing);
+        context.Products.Add(prod);
+        context.StoreInventories.Add(new StoreInventory { StoreId = storeId, IngredientId = ing.Id, CurrentStock = 1000, MinAlertThreshold = 10 });
+        context.ProductRecipes.Add(new ProductRecipe { ProductId = prod.Id, IngredientId = ing.Id, Quantity = 10 });
+        await context.SaveChangesAsync();
+
+        var request = new CheckoutOrderRequest(
+            StoreId: storeId,
+            CustomerId: null,
+            CashierId: null, // Client không gửi CashierId
+            OrderType: OrderType.TakeAway,
+            PaymentMethod: PaymentMethod.Cash,
+            Items: new List<CreateOrderItemRequest>
+            {
+                new CreateOrderItemRequest(prod.Id, 1)
+            }
+        );
+
+        // Act
+        var result = await orderService.CheckoutAsync(request);
+
+        // Assert
+        result.Should().NotBeNull();
+        var savedOrder = await context.Orders.FirstAsync(o => o.Id == result.OrderId);
+        savedOrder.CashierId.Should().Be(cashierUserId);
     }
 }

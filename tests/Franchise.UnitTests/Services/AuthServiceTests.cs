@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.Auth;
 using Franchise.Domain.Entities;
 using Franchise.Domain.Enums;
@@ -9,6 +10,7 @@ using Franchise.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace Franchise.UnitTests.Services;
@@ -23,7 +25,7 @@ public class AuthServiceTests
         return new AppDbContext(options);
     }
 
-    private (AuthService authService, AppDbContext context) CreateAuthService()
+    private (AuthService authService, AppDbContext context) CreateAuthService(ICurrentUserService? currentUserService = null)
     {
         var context = CreateInMemoryDbContext();
         var inMemorySettings = new Dictionary<string, string?>
@@ -44,7 +46,8 @@ public class AuthServiceTests
             context,
             passwordHasher,
             jwtTokenGenerator,
-            NullLogger<AuthService>.Instance);
+            NullLogger<AuthService>.Instance,
+            currentUserService);
 
         return (authService, context);
     }
@@ -169,5 +172,182 @@ public class AuthServiceTests
         result.Should().BeTrue();
         var tokenEntity = await context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == registerRes.RefreshToken);
         tokenEntity!.IsRevoked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenDatabaseHasUsers_AndCallerUnauthenticated_ShouldThrowUnauthorizedException()
+    {
+        // Arrange
+        var (authService, context) = CreateAuthService(currentUserService: null);
+        // Đã có 1 user trong hệ thống (đã qua bootstrap)
+        context.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "existing_admin",
+            PasswordHash = "hash",
+            Role = UserRole.HQ_SuperAdmin
+        });
+        await context.SaveChangesAsync();
+
+        var request = new RegisterRequest(
+            Username: "new_staff",
+            Email: "staff@franchise.vn",
+            Password: "Password123!",
+            FullName: "New Staff",
+            Role: UserRole.POS_Cashier
+        );
+
+        // Act & Assert
+        var act = async () => await authService.RegisterAsync(request);
+        var ex = await act.Should().ThrowAsync<UnauthorizedException>();
+        ex.Which.ErrorCode.Should().Be("UNAUTHORIZED");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenCallerNotSuperAdmin_TriesToCreateSuperAdmin_ShouldThrowForbiddenException()
+    {
+        // Arrange
+        var userManagerId = Guid.NewGuid();
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock.Setup(u => u.UserId).Returns(userManagerId);
+        currentUserMock.Setup(u => u.Role).Returns("Store_Manager");
+        currentUserMock.Setup(u => u.IsSuperAdmin).Returns(false);
+
+        var (authService, context) = CreateAuthService(currentUserMock.Object);
+        context.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "root_admin",
+            PasswordHash = "hash",
+            Role = UserRole.HQ_SuperAdmin
+        });
+        await context.SaveChangesAsync();
+
+        var request = new RegisterRequest(
+            Username: "hacker_admin",
+            Email: "hacker@franchise.vn",
+            Password: "Password123!",
+            FullName: "Hacker Admin",
+            Role: UserRole.HQ_SuperAdmin
+        );
+
+        // Act & Assert
+        var act = async () => await authService.RegisterAsync(request);
+        var ex = await act.Should().ThrowAsync<ForbiddenException>();
+        ex.Which.ErrorCode.Should().Be("FORBIDDEN");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenStoreManagerCreatesCashierForSameStore_ShouldSucceed()
+    {
+        // Arrange
+        var storeId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock.Setup(u => u.UserId).Returns(managerId);
+        currentUserMock.Setup(u => u.Role).Returns("Store_Manager");
+        currentUserMock.Setup(u => u.IsSuperAdmin).Returns(false);
+        currentUserMock.Setup(u => u.StoreId).Returns(storeId);
+
+        var (authService, context) = CreateAuthService(currentUserMock.Object);
+        context.Users.Add(new User
+        {
+            Id = managerId,
+            Username = "store_mgr",
+            PasswordHash = "hash",
+            Role = UserRole.Store_Manager
+        });
+        await context.SaveChangesAsync();
+
+        var request = new RegisterRequest(
+            Username: "cashier_same_store",
+            Email: "cashier@store.vn",
+            Password: "Password123!",
+            FullName: "Cashier",
+            Role: UserRole.POS_Cashier,
+            StoreId: storeId
+        );
+
+        // Act
+        var res = await authService.RegisterAsync(request);
+
+        // Assert
+        res.Should().NotBeNull();
+        res.User.Username.Should().Be("cashier_same_store");
+        var savedUser = await context.Users.FirstAsync(u => u.Username == "cashier_same_store");
+        savedUser.Role.Should().Be(UserRole.POS_Cashier);
+        savedUser.StoreId.Should().Be(storeId);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenStoreManagerCreatesCashierForDifferentStore_ShouldThrowForbiddenException()
+    {
+        // Arrange
+        var storeIdA = Guid.NewGuid();
+        var storeIdB = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock.Setup(u => u.UserId).Returns(managerId);
+        currentUserMock.Setup(u => u.Role).Returns("Store_Manager");
+        currentUserMock.Setup(u => u.IsSuperAdmin).Returns(false);
+        currentUserMock.Setup(u => u.StoreId).Returns(storeIdA);
+
+        var (authService, context) = CreateAuthService(currentUserMock.Object);
+        context.Users.Add(new User
+        {
+            Id = managerId,
+            Username = "mgr_a",
+            PasswordHash = "hash",
+            Role = UserRole.Store_Manager
+        });
+        await context.SaveChangesAsync();
+
+        var request = new RegisterRequest(
+            Username: "cashier_b",
+            Email: "cashier@b.vn",
+            Password: "Password123!",
+            FullName: "Cashier B",
+            Role: UserRole.POS_Cashier,
+            StoreId: storeIdB // Khác chi nhánh
+        );
+
+        // Act & Assert
+        var act = async () => await authService.RegisterAsync(request);
+        var ex = await act.Should().ThrowAsync<ForbiddenException>();
+        ex.Which.ErrorCode.Should().Be("FORBIDDEN");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenCashierTriesToRegisterStaff_ShouldThrowForbiddenException()
+    {
+        // Arrange
+        var cashierId = Guid.NewGuid();
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock.Setup(u => u.UserId).Returns(cashierId);
+        currentUserMock.Setup(u => u.Role).Returns("POS_Cashier");
+        currentUserMock.Setup(u => u.IsSuperAdmin).Returns(false);
+
+        var (authService, context) = CreateAuthService(currentUserMock.Object);
+        context.Users.Add(new User
+        {
+            Id = cashierId,
+            Username = "cashier_x",
+            PasswordHash = "hash",
+            Role = UserRole.POS_Cashier
+        });
+        await context.SaveChangesAsync();
+
+        var request = new RegisterRequest(
+            Username: "cashier_y",
+            Email: "cashier_y@store.vn",
+            Password: "Password123!",
+            FullName: "Cashier Y",
+            Role: UserRole.POS_Cashier
+        );
+
+        // Act & Assert
+        var act = async () => await authService.RegisterAsync(request);
+        var ex = await act.Should().ThrowAsync<ForbiddenException>();
+        ex.Which.ErrorCode.Should().Be("FORBIDDEN");
     }
 }
