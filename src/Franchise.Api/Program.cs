@@ -20,7 +20,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// 2. Web API, ProblemDetails & Global Exception Handler
+// 2. Web API, ProblemDetails, HealthChecks & Global Exception Handler
+builder.Services.AddHealthChecks();
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = c =>
@@ -139,6 +140,7 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // --- Pipeline: đặt SỚM NHẤT để bọc được mọi middleware phía sau ---
+app.UseMiddleware<Franchise.Api.Middleware.RequestTimingMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -164,6 +166,8 @@ app.UseCors("SignalRCorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/ready");
 app.MapControllers();
 app.MapHub<FranchiseHub>("/hubs/franchise");
 
