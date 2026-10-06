@@ -26,6 +26,11 @@ public class AppDbContext : DbContext
     // 3. Phân hệ Kho & Chuỗi cung ứng
     public DbSet<StoreInventory> StoreInventories => Set<StoreInventory>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
+    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
+    public DbSet<WarehouseInventory> WarehouseInventories => Set<WarehouseInventory>();
+    public DbSet<WarehouseInventoryTransaction> WarehouseInventoryTransactions => Set<WarehouseInventoryTransaction>();
+    public DbSet<StockTransferOrder> StockTransferOrders => Set<StockTransferOrder>();
+    public DbSet<StockTransferItem> StockTransferItems => Set<StockTransferItem>();
 
     // 4. Phân hệ Khách hàng & Đơn hàng
     public DbSet<Customer> Customers => Set<Customer>();
@@ -328,5 +333,111 @@ public class AppDbContext : DbContext
             b.Property(e => e.IdempotencyKey).IsRequired().HasMaxLength(100);
             b.Property(e => e.ResponsePayload).IsRequired();
         });
+
+        // --- 6. SUPPLY CHAIN, WAREHOUSE & TRANSFERS ---
+        modelBuilder.Entity<Warehouse>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.Code).IsUnique();
+            b.Property(e => e.Code).IsRequired().HasMaxLength(50);
+            b.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            b.Property(e => e.Address).HasMaxLength(500);
+            b.Property(e => e.ContactPhone).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<WarehouseInventory>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => new { e.WarehouseId, e.IngredientId }).IsUnique();
+            b.Property(e => e.CurrentStock).HasPrecision(18, 4);
+            b.Property(e => e.SafetyStock).HasPrecision(18, 4);
+
+            b.HasOne(e => e.Warehouse)
+                .WithMany(w => w.Inventories)
+                .HasForeignKey(e => e.WarehouseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.Ingredient)
+                .WithMany()
+                .HasForeignKey(e => e.IngredientId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<WarehouseInventoryTransaction>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.QuantityChange).HasPrecision(18, 4);
+            b.Property(e => e.BalanceAfter).HasPrecision(18, 4);
+            b.Property(e => e.TransactionType).HasConversion<string>().HasMaxLength(50);
+            b.Property(e => e.ReferenceNumber).HasMaxLength(100);
+            b.Property(e => e.Note).HasMaxLength(500);
+
+            b.HasOne(e => e.Warehouse)
+                .WithMany()
+                .HasForeignKey(e => e.WarehouseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.Ingredient)
+                .WithMany()
+                .HasForeignKey(e => e.IngredientId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StockTransferOrder>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.TransferCode).IsUnique();
+            b.Property(e => e.TransferCode).IsRequired().HasMaxLength(50);
+            b.Property(e => e.Status).HasConversion<string>().HasMaxLength(30);
+            b.Property(e => e.DispatchTrackingNumber).HasMaxLength(100);
+            b.Property(e => e.Notes).HasMaxLength(500);
+            b.Property(e => e.RejectionReason).HasMaxLength(500);
+            b.Property(e => e.DiscrepancyNotes).HasMaxLength(500);
+
+            b.HasOne(e => e.SourceWarehouse)
+                .WithMany(w => w.OutboundTransfers)
+                .HasForeignKey(e => e.SourceWarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.DestinationStore)
+                .WithMany()
+                .HasForeignKey(e => e.DestinationStoreId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StockTransferItem>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.RequestedQuantity).HasPrecision(18, 4);
+            b.Property(e => e.ApprovedQuantity).HasPrecision(18, 4);
+            b.Property(e => e.ActualReceivedQuantity).HasPrecision(18, 4);
+            b.Property(e => e.UnitCost).HasPrecision(18, 2);
+            b.Property(e => e.Notes).HasMaxLength(500);
+
+            b.HasOne(e => e.TransferOrder)
+                .WithMany(o => o.Items)
+                .HasForeignKey(e => e.TransferOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.Ingredient)
+                .WithMany()
+                .HasForeignKey(e => e.IngredientId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Seed Kho Tổng Trung Tâm HQ
+        var centralWarehouseId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        modelBuilder.Entity<Warehouse>().HasData(
+            new Warehouse
+            {
+                Id = centralWarehouseId,
+                Code = "WH-CENTRAL-01",
+                Name = "Kho Tổng Trung Tâm Miền Nam",
+                Address = "Khu Công Nghiệp Tân Bình, P. Tây Thạnh, Q. Tân Phú, TP. HCM",
+                ContactPhone = "1900 6868",
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
     }
 }
