@@ -23,6 +23,16 @@ public class BusinessRuleException : DomainException
     public BusinessRuleException(string errorCode, string message) : base(errorCode, message) { }
 }
 
+public class UnauthorizedException : DomainException
+{
+    public UnauthorizedException(string errorCode, string message) : base(errorCode, message) { }
+}
+
+public class ForbiddenException : DomainException
+{
+    public ForbiddenException(string errorCode, string message) : base(errorCode, message) { }
+}
+
 public sealed class RequestValidationException : DomainException
 {
     public IDictionary<string, string[]> Errors { get; }

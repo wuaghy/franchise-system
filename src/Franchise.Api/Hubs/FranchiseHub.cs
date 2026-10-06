@@ -1,39 +1,15 @@
 using Microsoft.AspNetCore.SignalR;
-using Franchise.Application.Common.Interfaces;
-using Franchise.Domain.Entities;
-using Microsoft.Extensions.Configuration;
+using System.Security.Claims;
 
 namespace Franchise.Api.Hubs;
 
 public class FranchiseHub : Hub<IFranchiseHubClient>
 {
     private readonly ILogger<FranchiseHub> _logger;
-    private readonly IAuthService _authService;
-    private readonly IConfiguration _configuration;
 
-    public FranchiseHub(
-        ILogger<FranchiseHub> logger,
-        IAuthService authService,
-        IConfiguration configuration)
+    public FranchiseHub(ILogger<FranchiseHub> logger)
     {
         _logger = logger;
-        _authService = authService;
-        _configuration = configuration;
-    }
-
-    public override async Task OnConnectedAsync()
-    {
-        var token = Context.Headers["Authorization"].FirstOrDefault();
-        if (string.IsNullOrEmpty(token))
-            throw new UnauthorizedException("Missing Authorization Token");
-
-        var isValid = _authService.ValidateToken(token, out var user);
-        if (!isValid)
-            throw new UnauthorizedException("Invalid Authorization Token");
-
-        await Groups.AddToGroupAsync(Context.ConnectionId, user.StoreId?.ToString() ?? "hq");
-        await Groups.AddToGroupAsync(Context.ConnectionId, "all");
-        await base.OnConnectedAsync();
     }
 
     public async Task JoinStoreGroup(string storeId)
@@ -59,6 +35,25 @@ public class FranchiseHub : Hub<IFranchiseHubClient>
     public override async Task OnConnectedAsync()
     {
         _logger.LogInformation("Client SignalR đã kết nối: {ConnectionId}", Context.ConnectionId);
+
+        var user = Context.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            var storeId = user.FindFirst("store_id")?.Value;
+            if (!string.IsNullOrEmpty(storeId))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"store_{storeId}");
+                _logger.LogInformation("User {UserId} tự động tham gia nhóm store_{StoreId}", user.FindFirst(ClaimTypes.NameIdentifier)?.Value, storeId);
+            }
+
+            var role = user.FindFirst(ClaimTypes.Role)?.Value;
+            if (role is "HQ_SuperAdmin" or "HQ_Staff")
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, "hq_admin");
+            }
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, "all");
         await base.OnConnectedAsync();
     }
 

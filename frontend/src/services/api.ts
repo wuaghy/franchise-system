@@ -3,7 +3,7 @@
  * Integrates directly with ASP.NET Core 8 Web API backend
  */
 
-import { getTokenFromLocalStorage } from '../auth/auth';
+import { getTokenFromLocalStorage } from './auth.ts';
  
 export interface StoreItem {
   id: string;

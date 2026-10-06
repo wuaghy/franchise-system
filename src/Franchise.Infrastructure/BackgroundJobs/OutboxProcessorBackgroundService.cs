@@ -57,7 +57,7 @@ public class OutboxProcessorBackgroundService : BackgroundService
                                 message.AggregateId);
 
                             // 1. Phân phối Real-time SignalR Event nếu là OrderCompleted
-                            if (message.EventType == nameof(OrderCompletedDomainEvent) &&
+                            if ((message.EventType == nameof(OrderCompletedDomainEvent) || message.EventType == "OrderCompleted") &&
                                 !string.IsNullOrWhiteSpace(message.Payload) &&
                                 notificationService != null)
                             {

@@ -1,4 +1,5 @@
 import * as signalR from '@microsoft/signalr';
+import { getTokenFromLocalStorage } from './auth.ts';
 
 export interface OrderCompletedNotification {
   orderId: string;
@@ -47,9 +48,7 @@ class SignalRService {
       .withUrl('/hubs/franchise', {
         skipNegotiation: false,
         transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
-        headers: {
-          Authorization: `Bearer ${getTokenFromLocalStorage()}`
-        },
+        accessTokenFactory: () => getTokenFromLocalStorage() || '',
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(signalR.LogLevel.Warning)

@@ -18,6 +18,7 @@ public class Store : BaseEntity
     public bool IsActive { get; set; } = true;
 
     // Navigation properties
+    public ICollection<User> Users { get; set; } = new List<User>();
     public ICollection<StoreUser> StoreUsers { get; set; } = new List<StoreUser>();
     public ICollection<StoreInventory> StoreInventories { get; set; } = new List<StoreInventory>();
     public ICollection<Order> Orders { get; set; } = new List<Order>();

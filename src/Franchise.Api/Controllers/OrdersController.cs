@@ -27,9 +27,12 @@ public class OrdersController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Checkout([FromBody] CheckoutOrderRequest request, CancellationToken ct)
+    public async Task<IActionResult> Checkout(
+        [FromBody] CheckoutOrderRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+        CancellationToken ct)
     {
-        var result = await _orderService.CheckoutAsync(request, ct);
+        var result = await _orderService.CheckoutAsync(request, idempotencyKey, ct);
         return Ok(result);
     }
 }

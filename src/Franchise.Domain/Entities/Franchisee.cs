@@ -11,5 +11,6 @@ public class Franchisee : BaseEntity
     public bool IsActive { get; set; } = true;
 
     // Navigation
+    public ICollection<User> Users { get; set; } = new List<User>();
     public ICollection<Store> Stores { get; set; } = new List<Store>();
 }

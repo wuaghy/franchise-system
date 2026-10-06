@@ -50,11 +50,11 @@ public class OrdersControllerTests
         );
 
         _mockOrderService
-            .Setup(s => s.CheckoutAsync(request, It.IsAny<CancellationToken>()))
+            .Setup(s => s.CheckoutAsync(request, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
-        var actionResult = await _controller.Checkout(request, CancellationToken.None);
+        var actionResult = await _controller.Checkout(request, null, CancellationToken.None);
 
         // Assert
         var okResult = actionResult as OkObjectResult;

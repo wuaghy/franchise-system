@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<Franchisee> Franchisees => Set<Franchisee>();
     public DbSet<Store> Stores => Set<Store>();
     public DbSet<StoreUser> StoreUsers => Set<StoreUser>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     // 2. Phân hệ Sản phẩm & Định lượng (Recipe/BoM)
     public DbSet<Category> Categories => Set<Category>();
@@ -77,6 +79,41 @@ public class AppDbContext : DbContext
             b.HasOne(e => e.Store)
                 .WithMany(s => s.StoreUsers)
                 .HasForeignKey(e => e.StoreId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<User>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.Username).IsUnique();
+            b.HasIndex(e => e.Email).IsUnique();
+            b.Property(e => e.Username).IsRequired().HasMaxLength(50);
+            b.Property(e => e.Email).IsRequired().HasMaxLength(150);
+            b.Property(e => e.PasswordHash).IsRequired().HasMaxLength(255);
+            b.Property(e => e.FullName).IsRequired().HasMaxLength(150);
+            b.Property(e => e.Role).HasConversion<string>().HasMaxLength(40);
+
+            b.HasOne(e => e.Store)
+                .WithMany(s => s.Users)
+                .HasForeignKey(e => e.StoreId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(e => e.Franchisee)
+                .WithMany(f => f.Users)
+                .HasForeignKey(e => e.FranchiseeId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<RefreshToken>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.Token).IsUnique();
+            b.Property(e => e.Token).IsRequired().HasMaxLength(255);
+            b.Property(e => e.ReplacedByToken).HasMaxLength(255);
+
+            b.HasOne(e => e.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

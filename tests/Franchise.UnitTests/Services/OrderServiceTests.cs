@@ -390,4 +390,59 @@ public class OrderServiceTests
         await act.Should().ThrowAsync<RequestValidationException>()
             .WithMessage("*không được là số âm*");
     }
+
+    [Fact]
+    public async Task CheckoutAsync_WithIdempotencyKey_ShouldReturnCachedResponseOnDuplicateRequest()
+    {
+        // Arrange
+        var (orderService, context) = CreateOrderService();
+        var storeId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var coffeeIngId = Guid.NewGuid();
+
+        context.Stores.Add(new Store { Id = storeId, Code = "ST-IDEMP", Name = "Store Idempotent", IsActive = true });
+        context.Products.Add(new Product { Id = productId, Name = "Cà phê đen", Sku = "CF-BLK", BasePrice = 20000m, IsAvailable = true });
+        context.Ingredients.Add(new Ingredient { Id = coffeeIngId, Code = "CF-B", Name = "Cà phê", Unit = "gram" });
+        context.ProductRecipes.Add(new ProductRecipe { ProductId = productId, IngredientId = coffeeIngId, Quantity = 15m });
+        context.StoreInventories.Add(new StoreInventory { StoreId = storeId, IngredientId = coffeeIngId, CurrentStock = 100m, MinAlertThreshold = 10m });
+        await context.SaveChangesAsync();
+
+        var request = new CheckoutOrderRequest(
+            StoreId: storeId,
+            CustomerId: null,
+            CashierId: null,
+            OrderType: OrderType.DineIn,
+            PaymentMethod: PaymentMethod.Cash,
+            Items: new List<CreateOrderItemRequest>
+            {
+                new CreateOrderItemRequest(productId, 1)
+            }
+        );
+
+        var idempotencyKey = "POS-REQ-ABC-12345";
+
+        // Act 1: Lần gọi thứ nhất
+        var firstResponse = await orderService.CheckoutAsync(request, idempotencyKey);
+
+        // Act 2: Lần gọi thứ hai (trùng key do mạng chập chờn / double click)
+        var secondResponse = await orderService.CheckoutAsync(request, idempotencyKey);
+
+        // Assert
+        secondResponse.Should().NotBeNull();
+        secondResponse.OrderId.Should().Be(firstResponse.OrderId);
+        secondResponse.OrderNumber.Should().Be(firstResponse.OrderNumber);
+        secondResponse.FinalAmount.Should().Be(firstResponse.FinalAmount);
+
+        // Đảm bảo chỉ có DUY NHẤT 1 đơn hàng và 1 bản ghi thanh toán được tạo trong DB
+        var totalOrders = await context.Orders.CountAsync();
+        totalOrders.Should().Be(1);
+
+        // Đảm bảo chỉ trừ kho đúng 1 lần (100 - 15 = 85g, không bị trừ thành 70g)
+        var stock = await context.StoreInventories.FirstAsync(si => si.StoreId == storeId && si.IngredientId == coffeeIngId);
+        stock.CurrentStock.Should().Be(85m);
+
+        // Bản ghi IdempotencyRecord được lưu lại
+        var record = await context.IdempotencyRecords.FirstOrDefaultAsync(r => r.IdempotencyKey == idempotencyKey);
+        record.Should().NotBeNull();
+    }
 }

@@ -28,8 +28,29 @@ public class OrderService : IOrderService
         _logger = logger;
     }
 
-    public async Task<CheckoutOrderResponse> CheckoutAsync(CheckoutOrderRequest request, CancellationToken ct = default)
+    public async Task<CheckoutOrderResponse> CheckoutAsync(
+        CheckoutOrderRequest request, 
+        string? idempotencyKey = null, 
+        CancellationToken ct = default)
     {
+        // 0. Kiểm tra Idempotency Record (chống trùng lặp giao dịch POS)
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            var existingRecord = await _context.IdempotencyRecords
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.IdempotencyKey == idempotencyKey, ct);
+
+            if (existingRecord != null)
+            {
+                _logger.LogInformation("Idempotency key {Key} đã tồn tại. Trả về kết quả checkout đã lưu trước đó.", idempotencyKey);
+                var cachedResponse = JsonSerializer.Deserialize<CheckoutOrderResponse>(existingRecord.ResponsePayload);
+                if (cachedResponse != null)
+                {
+                    return cachedResponse;
+                }
+            }
+        }
+
         // 1. Validation cơ bản đầu vào
         if (request.Items == null || request.Items.Count == 0)
         {
@@ -213,15 +234,7 @@ public class OrderService : IOrderService
             _context.OutboxMessages.Add(outboxMessage);
             await _context.SaveChangesAsync(ct);
 
-            // 6.4 Commit Transaction
-            if (transaction != null)
-            {
-                await transaction.CommitAsync(ct);
-            }
-
-            _logger.LogInformation("Đơn hàng {OrderNumber} thanh toán thành công với số tiền {FinalAmount:N0} VND.", order.OrderNumber, order.FinalAmount);
-
-            return new CheckoutOrderResponse(
+            var checkoutResponse = new CheckoutOrderResponse(
                 order.Id,
                 order.OrderNumber,
                 order.Status,
@@ -233,6 +246,30 @@ public class OrderService : IOrderService
                 order.CreatedAt,
                 deductionResult.DeductedItems
             );
+
+            // 6.4 Lưu Idempotency Record (nếu có key)
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                var idempotencyRecord = new IdempotencyRecord
+                {
+                    IdempotencyKey = idempotencyKey,
+                    StatusCode = 200,
+                    ResponsePayload = JsonSerializer.Serialize(checkoutResponse),
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.IdempotencyRecords.Add(idempotencyRecord);
+                await _context.SaveChangesAsync(ct);
+            }
+
+            // 6.5 Commit Transaction
+            if (transaction != null)
+            {
+                await transaction.CommitAsync(ct);
+            }
+
+            _logger.LogInformation("Đơn hàng {OrderNumber} thanh toán thành công với số tiền {FinalAmount:N0} VND.", order.OrderNumber, order.FinalAmount);
+
+            return checkoutResponse;
         }
         catch (Exception ex)
         {
