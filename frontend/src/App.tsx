@@ -43,13 +43,15 @@ import {
   SlidersHorizontal,
   Save,
   RotateCcw,
+  Truck,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { realtimeHub, type ConnectionStatus, type LowStockAlertNotification } from "./services/signalr.ts";
 import { getCurrentUser, login as apiLogin, logout as apiLogout, type User } from "./services/auth.ts";
 import { costingApi, type ProductCosting, type IngredientItem } from "./services/costing.ts";
+import { TransfersHubScreen } from "./components/TransfersHubScreen.tsx";
 
-type Screen = "stores" | "inventory" | "bom-studio" | "pos";
+type Screen = "stores" | "inventory" | "transfers" | "bom-studio" | "pos";
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
 
@@ -108,6 +110,7 @@ function Panel({ children, className = "" }: { children: ReactNode; className?: 
 const navItems = [
   { id: "stores" as Screen, label: "Store Network", sub: "Chi nhánh", icon: Building2 },
   { id: "inventory" as Screen, label: "Live Inventory", sub: "Kho & BoM", icon: Box },
+  { id: "transfers" as Screen, label: "Supply Chain", sub: "Điều chuyển STO", icon: Truck },
   { id: "bom-studio" as Screen, label: "BoM Studio", sub: "COGS & Lợi nhuận", icon: Sparkles },
   { id: "pos" as Screen, label: "POS Terminal", sub: "Bán hàng", icon: LayoutGrid },
 ];
@@ -1738,6 +1741,7 @@ export default function App() {
       <div id="main-content" aria-label={title}>
         {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
         {screen === "inventory" && <InventoryScreen openModal={setModal} inventory={inventory} activeAlert={activeAlert} />}
+        {screen === "transfers" && <TransfersHubScreen currentUser={currentUser} />}
         {screen === "bom-studio" && <BomStudioScreen />}
         {screen === "pos" && <PosScreen openModal={setModal} />}
       </div>
