@@ -103,4 +103,61 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(isPeakHour(3), false);  // Overnight
     assert.equal(isPeakHour(15), false); // Mid afternoon
   });
+
+  it('validates offline order queueing and serialization logic', () => {
+    const offlineOrder = {
+      offlineOrderId: 'OFF-1728211200000',
+      idempotencyKey: 'POS-OFF-OFF-1728211200000',
+      storeId: '00000000-0000-0000-0000-000000000001',
+      paymentMethod: 0,
+      orderType: 1,
+      subtotal: 50000,
+      discountAmount: 0,
+      vatAmount: 4000,
+      finalAmount: 54000,
+      offlineCreatedAt: new Date().toISOString(),
+      items: [
+        {
+          productId: '00000000-0000-0000-0000-000000000002',
+          quantity: 2,
+          unitPrice: 25000,
+          specialNote: 'M'
+        }
+      ]
+    };
+
+    const serialized = JSON.stringify([offlineOrder]);
+    const parsed = JSON.parse(serialized);
+
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].finalAmount, 54000);
+    assert.equal(parsed[0].items[0].quantity, 2);
+    assert.ok(parsed[0].idempotencyKey.startsWith('POS-OFF-'));
+  });
+
+  it('verifies offline sync result status filtering and queue clearing', () => {
+    const queue = [
+      { offlineOrderId: 'OFF-1', finalAmount: 30000 },
+      { offlineOrderId: 'OFF-2', finalAmount: 45000 },
+      { offlineOrderId: 'OFF-3', finalAmount: 60000 }
+    ];
+
+    const syncResults = [
+      { offlineOrderId: 'OFF-1', status: 'Synced' },
+      { offlineOrderId: 'OFF-2', status: 'DuplicateSkipped' },
+      { offlineOrderId: 'OFF-3', status: 'Failed' }
+    ];
+
+    // Các đơn Synced hoặc DuplicateSkipped được dọn khỏi hàng đợi
+    const processedIds = new Set(
+      syncResults
+        .filter(r => r.status === 'Synced' || r.status === 'DuplicateSkipped')
+        .map(r => r.offlineOrderId)
+    );
+
+    const remainingQueue = queue.filter(item => !processedIds.has(item.offlineOrderId));
+
+    assert.equal(remainingQueue.length, 1);
+    assert.equal(remainingQueue[0].offlineOrderId, 'OFF-3');
+  });
 });

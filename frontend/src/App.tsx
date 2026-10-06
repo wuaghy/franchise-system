@@ -54,6 +54,16 @@ import { costingApi, type ProductCosting, type IngredientItem } from "./services
 import { TransfersHubScreen } from "./components/TransfersHubScreen.tsx";
 import { KdsScreen } from "./components/KdsScreen.tsx";
 import { AnalyticsHubScreen } from "./components/AnalyticsHubScreen.tsx";
+import {
+  enqueueOfflineOrder,
+  getPendingOfflineOrders,
+  getPendingOfflineOrderCount,
+  type OfflineOrderSyncItem,
+} from "./services/offlineQueue.ts";
+import {
+  syncPendingOfflineOrders,
+  initOfflineSyncListeners,
+} from "./services/posSync.ts";
 
 type Screen = "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics";
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
@@ -1108,6 +1118,34 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
   ]);
   const [payment, setPayment] = useState<Payment>("Cash");
   const [orderType, setOrderType] = useState("Take-away");
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [offlineCount, setOfflineCount] = useState<number>(() => getPendingOfflineOrderCount());
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setOfflineCount(getPendingOfflineOrderCount());
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setOfflineCount(getPendingOfflineOrderCount());
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    const cleanupSync = initOfflineSyncListeners("00000000-0000-0000-0000-000000000001", () => {
+      setOfflineCount(getPendingOfflineOrderCount());
+    });
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      cleanupSync();
+    };
+  }, []);
+
   const filtered = category === "All" ? products : products.filter((product) => product.category === category);
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity + item.toppings.length * 10000, 0);
   const vat = Math.round(subtotal * 0.08);
@@ -1124,6 +1162,60 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
   const updateQty = (id: number, delta: number) =>
     setCart((items) => items.map((item) => (item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item)));
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await syncPendingOfflineOrders("00000000-0000-0000-0000-000000000001");
+      setOfflineCount(getPendingOfflineOrderCount());
+      alert(`Đồng bộ thành công: ${res.successfulCount} đơn mới, ${res.duplicateSkippedCount} đơn đã tồn tại.`);
+    } catch (err: any) {
+      alert(`Lỗi đồng bộ: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePay = () => {
+    if (!cart.length) return;
+
+    if (!isOnline) {
+      const offlineOrderId = `OFF-${Date.now()}`;
+      const idempotencyKey = `POS-OFF-${offlineOrderId}`;
+      const offlineOrder: OfflineOrderSyncItem = {
+        offlineOrderId,
+        idempotencyKey,
+        storeId: "00000000-0000-0000-0000-000000000001",
+        paymentMethod: payment === "Cash" ? 0 : payment === "Credit Card" ? 1 : 2,
+        orderType: orderType === "Dine-in" ? 0 : 1,
+        subtotal,
+        discountAmount: 0,
+        vatAmount: vat,
+        finalAmount: total,
+        offlineCreatedAt: new Date().toISOString(),
+        items: cart.map((item) => ({
+          productId: "00000000-0000-0000-0000-000000000001",
+          quantity: item.quantity,
+          unitPrice: item.price,
+          specialNote: item.size,
+          modifiers: item.toppings.map((t) => ({
+            name: t,
+            extraPrice: 10000,
+            consumptionQuantity: 25,
+          })),
+        })),
+      };
+
+      enqueueOfflineOrder(offlineOrder);
+      setOfflineCount(getPendingOfflineOrderCount());
+      alert(`[Chế độ Ngoại Tuyến] Đã lưu đơn #${offlineOrderId} vào máy POS. Hệ thống sẽ tự động đồng bộ khi có Internet.`);
+      setCart([]);
+      openModal("receipt");
+      return;
+    }
+
+    openModal("receipt");
+  };
+
   return (
     <motion.main initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="mx-auto grid max-w-[1600px] gap-4 px-3 py-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(350px,0.75fr)] lg:px-5">
       <section className="min-w-0">
@@ -1133,15 +1225,50 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
             <h1 className="text-2xl font-black tracking-tight text-slate-950">Good morning, Linh</h1>
             <p className="text-xs text-slate-500">Tap a menu item to start building the order.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge tone="success" pulse>
-              Terminal online
-            </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {isOnline ? (
+              <Badge tone="success" pulse>
+                Terminal online
+              </Badge>
+            ) : (
+              <Badge tone="danger" pulse>
+                Offline Mode
+              </Badge>
+            )}
+            {offlineCount > 0 && (
+              <Badge tone="warning">
+                {offlineCount} đơn chờ nộp
+              </Badge>
+            )}
+            <Button
+              variant={offlineCount > 0 ? "primary" : "secondary"}
+              disabled={isSyncing || (!isOnline && offlineCount === 0)}
+              onClick={handleManualSync}
+              className="!text-xs !py-1 !px-3 !min-h-8"
+              title="Đồng bộ các đơn offline lên máy chủ"
+            >
+              <RefreshCcw size={14} className={isSyncing ? "animate-spin" : ""} />
+              {isSyncing ? "Đang nộp..." : "Đồng bộ"}
+            </Button>
             <Button>
               <MoreHorizontal size={18} />
             </Button>
           </div>
         </div>
+
+        {!isOnline && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 shadow-sm animate-pulse">
+            <div className="flex items-center gap-2 font-bold">
+              <AlertTriangle className="text-amber-600 shrink-0" size={18} />
+              <span>⚠️ Đang ở chế độ Offline - Các đơn thanh toán sẽ lưu tạm tại máy POS và tự động nộp lại khi có kết nối Internet.</span>
+            </div>
+            {offlineCount > 0 && (
+              <span className="shrink-0 rounded-lg bg-amber-200/80 px-2.5 py-1 font-mono font-black text-amber-950">
+                {offlineCount} đơn trong hàng đợi
+              </span>
+            )}
+          </div>
+        )}
         <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
           {["All", "Coffee", "Milk Tea", "Fruit Tea", "Pastry"].map((item) => (
             <button
@@ -1302,8 +1429,8 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
               </button>
             ))}
           </div>
-          <Button variant="primary" disabled={!cart.length} onClick={() => openModal("receipt")} className="w-full !min-h-13 text-xs tracking-wide">
-            <ShieldCheck size={18} /> Pay & deduct inventory <span className="ml-auto rounded-md bg-white/15 px-1.5 py-0.5 font-mono">F9</span>
+          <Button variant="primary" disabled={!cart.length} onClick={handlePay} className="w-full !min-h-13 text-xs tracking-wide">
+            <ShieldCheck size={18} /> {isOnline ? "Pay & deduct inventory" : "Lưu đơn ngoại tuyến (Offline)"} <span className="ml-auto rounded-md bg-white/15 px-1.5 py-0.5 font-mono">F9</span>
           </Button>
         </div>
       </Panel>
