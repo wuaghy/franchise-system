@@ -24,6 +24,22 @@ public static class DependencyInjection
         services.AddScoped<Franchise.Application.Common.Interfaces.IKitchenDisplayService, Services.KitchenDisplayService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IFinancialAnalyticsService, Services.FinancialAnalyticsService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IRoyaltyBillingService, Services.RoyaltyBillingService>();
+        var redisConnection = configuration.GetConnectionString("Redis") ?? configuration["Redis:ConnectionString"];
+        if (!string.IsNullOrWhiteSpace(redisConnection))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnection;
+                options.InstanceName = "Franchise_";
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
+
+        services.AddScoped<Franchise.Application.Common.Interfaces.ICacheService, Services.DistributedCacheService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.IOfflineOrderSyncService, Services.OfflineOrderSyncService>();
         services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;
