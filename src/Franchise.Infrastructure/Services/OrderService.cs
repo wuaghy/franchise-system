@@ -18,17 +18,20 @@ public class OrderService : IOrderService
     private readonly IInventoryService _inventoryService;
     private readonly ILogger<OrderService> _logger;
     private readonly ICurrentUserService? _currentUserService;
+    private readonly IKitchenDisplayService? _kitchenDisplayService;
 
     public OrderService(
         AppDbContext context,
         IInventoryService inventoryService,
         ILogger<OrderService> logger,
-        ICurrentUserService? currentUserService = null)
+        ICurrentUserService? currentUserService = null,
+        IKitchenDisplayService? kitchenDisplayService = null)
     {
         _context = context;
         _inventoryService = inventoryService;
         _logger = logger;
         _currentUserService = currentUserService;
+        _kitchenDisplayService = kitchenDisplayService;
     }
 
     public async Task<CheckoutOrderResponse> CheckoutAsync(
@@ -281,6 +284,19 @@ public class OrderService : IOrderService
             }
 
             _logger.LogInformation("Đơn hàng {OrderNumber} thanh toán thành công với số tiền {FinalAmount:N0} VND.", order.OrderNumber, order.FinalAmount);
+
+            // 6.6 Tự động điều phối vé chế biến KDS tới quầy Barista
+            if (_kitchenDisplayService != null)
+            {
+                try
+                {
+                    await _kitchenDisplayService.CreateTicketFromOrderAsync(order.Id, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lỗi khi tự động tạo vé KDS cho đơn hàng {OrderId}. Quầy Barista có thể cần làm mới thủ công.", order.Id);
+                }
+            }
 
             return checkoutResponse;
         }
