@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<Franchise.Application.Common.Interfaces.IPasswordHasher, Auth.PasswordHasher>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IJwtTokenGenerator, Auth.JwtTokenGenerator>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IAuthService, Services.AuthService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.ICostingService, Services.CostingService>();
         services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;

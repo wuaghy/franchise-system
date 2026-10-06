@@ -38,12 +38,18 @@ import {
   KeyRound,
   Lock,
   LogOut,
+  Sparkles,
+  Calculator,
+  SlidersHorizontal,
+  Save,
+  RotateCcw,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { realtimeHub, type ConnectionStatus, type LowStockAlertNotification } from "./services/signalr.ts";
 import { getCurrentUser, login as apiLogin, logout as apiLogout, type User } from "./services/auth.ts";
+import { costingApi, type ProductCosting, type IngredientItem } from "./services/costing.ts";
 
-type Screen = "stores" | "inventory" | "pos";
+type Screen = "stores" | "inventory" | "bom-studio" | "pos";
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
 
@@ -102,6 +108,7 @@ function Panel({ children, className = "" }: { children: ReactNode; className?: 
 const navItems = [
   { id: "stores" as Screen, label: "Store Network", sub: "Chi nhánh", icon: Building2 },
   { id: "inventory" as Screen, label: "Live Inventory", sub: "Kho & BoM", icon: Box },
+  { id: "bom-studio" as Screen, label: "BoM Studio", sub: "COGS & Lợi nhuận", icon: Sparkles },
   { id: "pos" as Screen, label: "POS Terminal", sub: "Bán hàng", icon: LayoutGrid },
 ];
 
@@ -549,6 +556,519 @@ function InventoryScreen({
           </table>
         </div>
       </Panel>
+    </motion.main>
+  );
+}
+
+const initialMockCosting: ProductCosting[] = [
+  {
+    productId: "prod-001",
+    sku: "TS-01",
+    name: "Trà Sữa Truyền Thống (Lê Lợi Flagship)",
+    sellingPrice: 35000,
+    totalCogs: 9000,
+    grossProfit: 26000,
+    grossMarginPercentage: 74.3,
+    marginStatus: "Healthy",
+    costBreakdown: [
+      { ingredientId: "ing-001", ingredientCode: "TEA", ingredientName: "Cốt trà đen Ceylon", unit: "ml", quantity: 30, unitCost: 100, totalCost: 3000, costSharePercentage: 33.3 },
+      { ingredientId: "ing-002", ingredientCode: "MILK", ingredientName: "Sữa tươi thanh trùng Dalat", unit: "ml", quantity: 50, unitCost: 120, totalCost: 6000, costSharePercentage: 66.7 },
+    ],
+  },
+  {
+    productId: "prod-002",
+    sku: "CF-01",
+    name: "Cà Phê Sữa Đá Sài Gòn",
+    sellingPrice: 29000,
+    totalCogs: 7500,
+    grossProfit: 21500,
+    grossMarginPercentage: 74.1,
+    marginStatus: "Healthy",
+    costBreakdown: [
+      { ingredientId: "ing-003", ingredientCode: "COFFEE", ingredientName: "Cà phê phin Đắk Lắk", unit: "g", quantity: 25, unitCost: 180, totalCost: 4500, costSharePercentage: 60.0 },
+      { ingredientId: "ing-004", ingredientCode: "CONDENSED", ingredientName: "Sữa đặc có đường", unit: "g", quantity: 33, unitCost: 90, totalCost: 3000, costSharePercentage: 40.0 },
+    ],
+  },
+  {
+    productId: "prod-003",
+    sku: "MT-01",
+    name: "Trà Oolong Tứ Quý Kem Cheese",
+    sellingPrice: 48000,
+    totalCogs: 21500,
+    grossProfit: 26500,
+    grossMarginPercentage: 55.2,
+    marginStatus: "Warning",
+    costBreakdown: [
+      { ingredientId: "ing-001", ingredientCode: "TEA", ingredientName: "Cốt trà Oolong Tứ Quý", unit: "ml", quantity: 40, unitCost: 150, totalCost: 6000, costSharePercentage: 27.9 },
+      { ingredientId: "ing-005", ingredientCode: "CHEESE", ingredientName: "Kem phô mai tươi Macchiato", unit: "g", quantity: 50, unitCost: 250, totalCost: 12500, costSharePercentage: 58.1 },
+      { ingredientId: "ing-006", ingredientCode: "SUGAR", ingredientName: "Nước đường mía nguyên chất", unit: "ml", quantity: 30, unitCost: 100, totalCost: 3000, costSharePercentage: 14.0 },
+    ],
+  },
+  {
+    productId: "prod-004",
+    sku: "FR-01",
+    name: "Sinh Tố Bơ Dừa Sáp Đặc Biệt",
+    sellingPrice: 45000,
+    totalCogs: 26000,
+    grossProfit: 19000,
+    grossMarginPercentage: 42.2,
+    marginStatus: "Critical",
+    costBreakdown: [
+      { ingredientId: "ing-007", ingredientCode: "AVOCADO", ingredientName: "Bơ sáp 034 Đắk Nông", unit: "g", quantity: 120, unitCost: 150, totalCost: 18000, costSharePercentage: 69.2 },
+      { ingredientId: "ing-004", ingredientCode: "CONDENSED", ingredientName: "Sữa đặc có đường", unit: "g", quantity: 40, unitCost: 90, totalCost: 3600, costSharePercentage: 13.8 },
+      { ingredientId: "ing-002", ingredientCode: "MILK", ingredientName: "Sữa tươi thanh trùng", unit: "ml", quantity: 36, unitCost: 122, totalCost: 4400, costSharePercentage: 17.0 },
+    ],
+  },
+];
+
+const initialMockIngredients: IngredientItem[] = [
+  { id: "ing-001", code: "TEA", name: "Cốt trà đen Ceylon", unit: "ml", standardCost: 100, createdAt: "" },
+  { id: "ing-002", code: "MILK", name: "Sữa tươi thanh trùng Dalat", unit: "ml", standardCost: 120, createdAt: "" },
+  { id: "ing-003", code: "COFFEE", name: "Cà phê phin Đắk Lắk", unit: "g", standardCost: 180, createdAt: "" },
+  { id: "ing-004", code: "CONDENSED", name: "Sữa đặc có đường", unit: "g", standardCost: 90, createdAt: "" },
+  { id: "ing-005", code: "CHEESE", name: "Kem phô mai tươi Macchiato", unit: "g", standardCost: 250, createdAt: "" },
+  { id: "ing-006", code: "SUGAR", name: "Nước đường mía nguyên chất", unit: "ml", standardCost: 100, createdAt: "" },
+  { id: "ing-007", code: "AVOCADO", name: "Bơ sáp 034 Đắk Nông", unit: "g", standardCost: 150, createdAt: "" },
+  { id: "ing-008", code: "PEARL", name: "Trân châu hoàng kim", unit: "g", standardCost: 50, createdAt: "" },
+  { id: "ing-009", code: "JELLY", name: "Thạch củ năng giòn", unit: "g", standardCost: 70, createdAt: "" },
+];
+
+function BomStudioScreen() {
+  const [productsCosting, setProductsCosting] = useState<ProductCosting[]>(initialMockCosting);
+  const [ingredients, setIngredients] = useState<IngredientItem[]>(initialMockIngredients);
+  const [selectedProductId, setSelectedProductId] = useState<string>("prod-001");
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Form state cho món đang chọn
+  const [sellingPrice, setSellingPrice] = useState<number>(35000);
+  const [recipeItems, setRecipeItems] = useState<{ ingredientId: string; quantity: number }[]>([
+    { ingredientId: "ing-001", quantity: 30 },
+    { ingredientId: "ing-002", quantity: 50 },
+  ]);
+  const [selectedIngredientToAdd, setSelectedIngredientToAdd] = useState<string>("");
+
+  useEffect(() => {
+    async function loadBackendData() {
+      try {
+        const [apiCogs, apiIngs] = await Promise.all([
+          costingApi.getAllProductsCosting().catch(() => []),
+          costingApi.getIngredients().catch(() => []),
+        ]);
+        if (apiCogs && apiCogs.length > 0) {
+          setProductsCosting(apiCogs);
+          const first = apiCogs[0];
+          setSelectedProductId(first.productId);
+          setSellingPrice(first.sellingPrice);
+          setRecipeItems(first.costBreakdown.map((b) => ({ ingredientId: b.ingredientId, quantity: b.quantity })));
+        }
+        if (apiIngs && apiIngs.length > 0) {
+          setIngredients(apiIngs);
+        }
+      } catch {
+        // Fallback to initial mocks
+      }
+    }
+    loadBackendData();
+  }, []);
+
+  const activeProduct = useMemo(
+    () => productsCosting.find((p) => p.productId === selectedProductId) || productsCosting[0],
+    [productsCosting, selectedProductId]
+  );
+
+  const selectProduct = (p: ProductCosting) => {
+    setSelectedProductId(p.productId);
+    setSellingPrice(p.sellingPrice);
+    setRecipeItems(p.costBreakdown.map((b) => ({ ingredientId: b.ingredientId, quantity: b.quantity })));
+    setSaveSuccess(false);
+  };
+
+  // Real-time calculation engine trong React
+  const calculated = useMemo(() => {
+    let totalCogs = 0;
+    const items = recipeItems.map((item) => {
+      const ing = ingredients.find((i) => i.id === item.ingredientId);
+      const unitCost = ing ? ing.standardCost : 0;
+      const cost = Math.round(item.quantity * unitCost);
+      totalCogs += cost;
+      return {
+        ingredientId: item.ingredientId,
+        code: ing?.code || "ING",
+        name: ing?.name || "Nguyên liệu",
+        unit: ing?.unit || "đv",
+        unitCost,
+        quantity: item.quantity,
+        totalCost: cost,
+      };
+    });
+
+    const itemsWithShare = items.map((i) => ({
+      ...i,
+      share: totalCogs > 0 ? Math.round((i.totalCost / totalCogs) * 1000) / 10 : 0,
+    }));
+
+    const grossProfit = sellingPrice - totalCogs;
+    const margin = sellingPrice > 0 ? Math.round((grossProfit / sellingPrice) * 1000) / 10 : 0;
+    const status: "Healthy" | "Warning" | "Critical" =
+      margin >= 65 ? "Healthy" : margin >= 50 ? "Warning" : "Critical";
+
+    return {
+      totalCogs,
+      grossProfit,
+      margin,
+      status,
+      items: itemsWithShare,
+    };
+  }, [recipeItems, ingredients, sellingPrice]);
+
+  const updateQuantity = (ingredientId: string, qty: number) => {
+    setRecipeItems((prev) =>
+      prev.map((item) => (item.ingredientId === ingredientId ? { ...item, quantity: Math.max(0, qty) } : item))
+    );
+    setSaveSuccess(false);
+  };
+
+  const removeIngredient = (ingredientId: string) => {
+    setRecipeItems((prev) => prev.filter((item) => item.ingredientId !== ingredientId));
+    setSaveSuccess(false);
+  };
+
+  const addIngredient = () => {
+    if (!selectedIngredientToAdd) return;
+    if (recipeItems.some((i) => i.ingredientId === selectedIngredientToAdd)) return;
+    setRecipeItems((prev) => [...prev, { ingredientId: selectedIngredientToAdd, quantity: 25 }]);
+    setSelectedIngredientToAdd("");
+    setSaveSuccess(false);
+  };
+
+  const handleSaveRecipe = async () => {
+    if (!activeProduct) return;
+    try {
+      setSaving(true);
+      await costingApi.saveProductRecipe(activeProduct.productId, recipeItems);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      alert("Lưu công thức thất bại: " + (err.message || "Lỗi quyền hạn"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    if (!search.trim()) return productsCosting;
+    const s = search.toLowerCase();
+    return productsCosting.filter((p) => p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s));
+  }, [productsCosting, search]);
+
+  const gaugeColors = {
+    Healthy: "from-emerald-500 to-teal-600 text-emerald-700 bg-emerald-50 border-emerald-200",
+    Warning: "from-amber-500 to-orange-500 text-amber-800 bg-amber-50 border-amber-200",
+    Critical: "from-rose-500 to-red-600 text-rose-700 bg-rose-50 border-rose-200",
+  };
+
+  return (
+    <motion.main
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mx-auto max-w-[1600px] px-4 py-6 lg:px-6 space-y-6"
+    >
+      {/* 1. Header Banner */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.2em] text-red-700">
+            <Sparkles size={14} />
+            <span>R&D Barista Lab · Financial Engine</span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+            Dynamic BoM & COGS Studio
+          </h1>
+          <p className="text-xs text-slate-500">
+            Trực quan hóa định lượng công thức pha chế, tính toán giá vốn hàng bán và bảo vệ biên lợi nhuận thời gian thực.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge tone="brand" pulse>
+            What-If Simulator Active
+          </Badge>
+          <Button variant="secondary" onClick={() => selectProduct(activeProduct)}>
+            <RotateCcw size={15} />
+            <span>Khôi phục</span>
+          </Button>
+          <Button variant="primary" onClick={handleSaveRecipe} disabled={saving}>
+            {saving ? <RefreshCcw size={15} className="animate-spin" /> : <Save size={15} />}
+            <span>{saveSuccess ? "Đã lưu thành công!" : "Lưu công thức"}</span>
+          </Button>
+        </div>
+      </div>
+
+      {saveSuccess && (
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-bold text-emerald-800">
+          <CheckCircle2 size={16} className="text-emerald-600" />
+          <span>Công thức pha chế cho '{activeProduct?.name}' đã được lưu vào hệ thống cơ sở dữ liệu chuỗi!</span>
+        </div>
+      )}
+
+      {/* 2. Three-Column Workspace Layout */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* CỘT 1: Danh sách sản phẩm (3 cột) */}
+        <div className="lg:col-span-3 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm món theo tên, SKU..."
+              className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3.5 py-2 text-xs font-medium outline-none focus:border-red-600 focus:ring-4 focus:ring-red-50"
+            />
+          </div>
+
+          <div className="space-y-2 max-h-[750px] overflow-y-auto pr-1">
+            {filteredProducts.map((p) => {
+              const isSelected = p.productId === selectedProductId;
+              const tone = p.marginStatus === "Healthy" ? "success" : p.marginStatus === "Warning" ? "warning" : "danger";
+              return (
+                <button
+                  key={p.productId}
+                  onClick={() => selectProduct(p)}
+                  className={`w-full text-left rounded-2xl border p-3.5 transition-all duration-150 ${
+                    isSelected
+                      ? "border-red-700 bg-red-50/50 shadow-md shadow-red-900/5 ring-2 ring-red-700/20"
+                      : "border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/60"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-[10px] font-extrabold text-slate-400">{p.sku}</span>
+                    <Badge tone={tone}>
+                      {p.grossMarginPercentage.toFixed(1)}%
+                    </Badge>
+                  </div>
+                  <h3 className="mt-1 text-sm font-black text-slate-900 line-clamp-1">{p.name}</h3>
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Giá bán: {p.sellingPrice.toLocaleString()}₫</span>
+                    <span className="font-bold text-slate-700">COGS: {p.totalCogs.toLocaleString()}₫</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* CỘT 2: Visual Recipe Mixer & Component Sliders (5 cột) */}
+        <div className="lg:col-span-5 space-y-4">
+          <Panel className="p-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="font-mono text-xs font-extrabold text-red-700">{activeProduct?.sku}</span>
+                <h2 className="text-lg font-black text-slate-950">{activeProduct?.name}</h2>
+              </div>
+              <div className="text-right">
+                <label className="block text-[10px] font-extrabold uppercase text-slate-400">Giá bán niêm yết</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={sellingPrice}
+                    step={1000}
+                    onChange={(e) => setSellingPrice(Number(e.target.value))}
+                    className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm font-black text-slate-900 outline-none focus:border-red-600"
+                  />
+                  <span className="text-xs font-bold text-slate-500">₫</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Danh sách thanh trượt định lượng */}
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between text-xs font-extrabold text-slate-400 uppercase tracking-wider">
+                <span>Thành phần công thức ly chuẩn</span>
+                <span>Chi phí tiêu hao</span>
+              </div>
+
+              {calculated.items.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
+                  Món này chưa có định lượng nguyên liệu. Hãy chọn nguyên liệu bên dưới để thêm vào ly.
+                </div>
+              ) : (
+                calculated.items.map((item) => (
+                  <div
+                    key={item.ingredientId}
+                    className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 space-y-2.5 transition hover:border-slate-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="grid size-6 place-items-center rounded bg-red-100 text-[10px] font-black text-red-800">
+                          {item.code.slice(0, 2)}
+                        </span>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900">{item.name}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">
+                            Đơn giá: {item.unitCost.toLocaleString()}₫/{item.unit}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-slate-900">
+                          {item.totalCost.toLocaleString()}₫
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeIngredient(item.ingredientId)}
+                          className="text-slate-400 hover:text-rose-600 transition"
+                          title="Xóa nguyên liệu"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Interactive Slider */}
+                    <div className="flex items-center gap-3 pt-1">
+                      <input
+                        type="range"
+                        min="0"
+                        max="150"
+                        step="1"
+                        value={item.quantity}
+                        onChange={(e) => updateQuantity(item.ingredientId, Number(e.target.value))}
+                        className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-red-700"
+                      />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <input
+                          type="number"
+                          min="0"
+                          max="500"
+                          value={item.quantity}
+                          onChange={(e) => updateQuantity(item.ingredientId, Number(e.target.value))}
+                          className="w-16 rounded-md border border-slate-200 px-2 py-0.5 text-center text-xs font-bold text-slate-900 outline-none focus:border-red-600"
+                        />
+                        <span className="text-[11px] font-bold text-slate-400">{item.unit}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {/* Thêm nguyên liệu */}
+              <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                <select
+                  value={selectedIngredientToAdd}
+                  onChange={(e) => setSelectedIngredientToAdd(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-red-600"
+                >
+                  <option value="">-- Chọn nguyên liệu thêm vào ly --</option>
+                  {ingredients
+                    .filter((ing) => !recipeItems.some((r) => r.ingredientId === ing.id))
+                    .map((ing) => (
+                      <option key={ing.id} value={ing.id}>
+                        {ing.name} ({ing.code}) · {ing.standardCost.toLocaleString()}₫/{ing.unit}
+                      </option>
+                    ))}
+                </select>
+                <Button variant="secondary" onClick={addIngredient} disabled={!selectedIngredientToAdd} className="!text-xs">
+                  <Plus size={15} />
+                  <span>Thêm</span>
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        </div>
+
+        {/* CỘT 3: Real-time Margin Gauge & Financial Intelligence (4 cột) */}
+        <div className="lg:col-span-4 space-y-4">
+          {/* Margin Gauge Card */}
+          <Panel className={`p-6 border-2 ${gaugeColors[calculated.status]} transition-all`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
+                Gross Margin Gauge
+              </span>
+              <Badge
+                tone={
+                  calculated.status === "Healthy"
+                    ? "success"
+                    : calculated.status === "Warning"
+                    ? "warning"
+                    : "danger"
+                }
+                pulse
+              >
+                {calculated.status}
+              </Badge>
+            </div>
+
+            <div className="mt-4 flex items-baseline gap-2">
+              <span className="text-4xl font-black tracking-tight text-slate-950">
+                {calculated.margin.toFixed(1)}%
+              </span>
+              <span className="text-xs font-extrabold text-slate-400">biên lợi nhuận gộp</span>
+            </div>
+
+            {/* Visual Progress Bar */}
+            <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-slate-200/80">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  calculated.status === "Healthy"
+                    ? "bg-emerald-500"
+                    : calculated.status === "Warning"
+                    ? "bg-amber-500"
+                    : "bg-rose-500"
+                }`}
+                style={{ width: `${Math.min(100, Math.max(0, calculated.margin))}%` }}
+              />
+            </div>
+
+            <p className="mt-3 text-xs leading-relaxed text-slate-600">
+              {calculated.status === "Healthy" && "🟢 Tỷ suất sinh lời tuyệt vời. Món này đạt chuẩn lợi nhuận mục tiêu chuỗi F&B (≥65%)."}
+              {calculated.status === "Warning" && "🟡 Cảnh báo: Lợi nhuận gộp ở mức trung bình (50-65%). Cân nhắc điều chỉnh định lượng hoặc giá bán."}
+              {calculated.status === "Critical" && "🔴 Nguy hiểm: Biên lợi nhuận dưới 50%! Cần rà soát ngay chi phí nguyên liệu để tránh rủi ro lỗ giá vốn."}
+            </p>
+          </Panel>
+
+          {/* KPI Summary Cards */}
+          <Panel className="p-5 space-y-4">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Cơ cấu Tài chính</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <span className="text-[10px] font-extrabold uppercase text-slate-400">Giá vốn (COGS)</span>
+                <span className="block text-base font-black text-rose-600">
+                  {calculated.totalCogs.toLocaleString()}₫
+                </span>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <span className="text-[10px] font-extrabold uppercase text-slate-400">Lợi nhuận gộp</span>
+                <span className="block text-base font-black text-emerald-600">
+                  {calculated.grossProfit.toLocaleString()}₫
+                </span>
+              </div>
+            </div>
+
+            {/* Tỷ trọng chi phí nguyên liệu */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <span className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                Tỷ trọng chi phí nguyên liệu (%)
+              </span>
+              <div className="space-y-1.5">
+                {calculated.items.map((item) => (
+                  <div key={item.ingredientId} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-bold text-slate-700">{item.name}</span>
+                      <span className="font-mono text-slate-500">{item.share}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className="h-full bg-red-700 rounded-full"
+                        style={{ width: `${item.share}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Panel>
+        </div>
+      </div>
     </motion.main>
   );
 }
@@ -1218,6 +1738,7 @@ export default function App() {
       <div id="main-content" aria-label={title}>
         {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
         {screen === "inventory" && <InventoryScreen openModal={setModal} inventory={inventory} activeAlert={activeAlert} />}
+        {screen === "bom-studio" && <BomStudioScreen />}
         {screen === "pos" && <PosScreen openModal={setModal} />}
       </div>
       <AnimatePresence>
