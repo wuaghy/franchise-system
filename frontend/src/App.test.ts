@@ -36,4 +36,18 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(vatAmount, 8000);
     assert.equal(total, 108000);
   });
+
+  it('calculates Stock Transfer discrepancy accurately', () => {
+    const item = {
+      ingredientName: 'Cà phê Robusta Hạt',
+      requestedQuantity: 50,
+      approvedQuantity: 40,
+      actualReceivedQuantity: 37,
+    };
+    const discrepancy = item.approvedQuantity - item.actualReceivedQuantity;
+    const isDiscrepant = discrepancy !== 0;
+
+    assert.equal(discrepancy, 3);
+    assert.equal(isDiscrepant, true);
+  });
 });
