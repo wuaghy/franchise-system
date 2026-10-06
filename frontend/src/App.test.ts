@@ -50,4 +50,30 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(discrepancy, 3);
     assert.equal(isDiscrepant, true);
   });
+
+  it('determines KDS SLA status thresholds correctly', () => {
+    const calculateSla = (elapsedSeconds: number, targetPreparationSeconds = 300) => {
+      if (elapsedSeconds <= 180) return 'Healthy';
+      if (elapsedSeconds <= targetPreparationSeconds) return 'Warning';
+      return 'Critical';
+    };
+
+    assert.equal(calculateSla(120), 'Healthy');
+    assert.equal(calculateSla(180), 'Healthy');
+    assert.equal(calculateSla(220), 'Warning');
+    assert.equal(calculateSla(300), 'Warning');
+    assert.equal(calculateSla(301), 'Critical');
+    assert.equal(calculateSla(450), 'Critical');
+  });
+
+  it('validates KDS ticket item prepared toggle logic', () => {
+    const items = [
+      { id: '1', productName: 'Phin Sữa Đá', isPrepared: false },
+      { id: '2', productName: 'Trà Sen Vàng', isPrepared: true }
+    ];
+
+    const toggled = items.map(item => item.id === '1' ? { ...item, isPrepared: !item.isPrepared } : item);
+    assert.equal(toggled[0].isPrepared, true);
+    assert.equal(toggled.every(i => i.isPrepared), true);
+  });
 });
