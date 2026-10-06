@@ -68,6 +68,8 @@ import { costingApi, type ProductCosting, type IngredientItem } from "./services
 import { TransfersHubScreen } from "./components/TransfersHubScreen.tsx";
 import { KdsScreen } from "./components/KdsScreen.tsx";
 import { AnalyticsHubScreen } from "./components/AnalyticsHubScreen.tsx";
+import { LandingScreen } from "./components/LandingScreen.tsx";
+import { CustomerScreen } from "./components/CustomerScreen.tsx";
 import {
   enqueueOfflineOrder,
   getPendingOfflineOrders,
@@ -79,7 +81,7 @@ import {
   initOfflineSyncListeners,
 } from "./services/posSync.ts";
 
-type Screen = "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics";
+type Screen = "landing" | "customer" | "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics";
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
 
@@ -146,12 +148,14 @@ function Panel({ children, className = "" }: { children: ReactNode; className?: 
 }
 
 const navItems = [
+  { id: "landing" as Screen, label: "Tổng Quan", sub: "Cổng phân quyền", icon: Sparkles },
+  { id: "customer" as Screen, label: "Khách Đặt Món", sub: "Menu & VietQR", icon: ShoppingBag },
+  { id: "pos" as Screen, label: "POS Terminal", sub: "Thu ngân", icon: LayoutGrid },
+  { id: "kds" as Screen, label: "Kitchen Display", sub: "Barista KDS", icon: Coffee },
+  { id: "transfers" as Screen, label: "Supply Chain", sub: "Điều chuyển STO", icon: Truck },
+  { id: "bom-studio" as Screen, label: "BoM Studio", sub: "COGS & Lợi nhuận", icon: Calculator },
   { id: "stores" as Screen, label: "Store Network", sub: "Chi nhánh", icon: Building2 },
   { id: "inventory" as Screen, label: "Live Inventory", sub: "Kho & BoM", icon: Box },
-  { id: "transfers" as Screen, label: "Supply Chain", sub: "Điều chuyển STO", icon: Truck },
-  { id: "bom-studio" as Screen, label: "BoM Studio", sub: "COGS & Lợi nhuận", icon: Sparkles },
-  { id: "pos" as Screen, label: "POS Terminal", sub: "Bán hàng", icon: LayoutGrid },
-  { id: "kds" as Screen, label: "Kitchen Display", sub: "Barista KDS", icon: Coffee },
   { id: "analytics" as Screen, label: "Business Intelligence", sub: "Báo cáo & Phí HQ", icon: BarChart3 },
 ];
 
@@ -198,7 +202,7 @@ function Header({
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-3 px-4 lg:px-6">
-        <button onClick={() => setScreen("stores")} className="flex shrink-0 items-center gap-3 rounded-xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-red-700">
+        <button onClick={() => setScreen("landing")} className="flex shrink-0 items-center gap-3 rounded-xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-red-700">
           <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-red-700 to-red-950 text-lg font-black text-white shadow-lg shadow-red-900/20">F</span>
           <span className="hidden xl:block">
             <span className="block text-sm font-black tracking-tight text-slate-950">FRANCHISE</span>
@@ -2236,7 +2240,7 @@ function ModalContent({
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("stores");
+  const [screen, setScreen] = useState<Screen>("landing");
   const [modal, setModal] = useState<Modal>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("Connecting");
   const [dailyRevenue, setDailyRevenue] = useState(318400000);
@@ -2406,6 +2410,8 @@ export default function App() {
         onMarkAllRead={handleMarkAllRead}
       />
       <div id="main-content" aria-label={title}>
+        {screen === "landing" && <LandingScreen onNavigate={(s) => setScreen(s)} openLogin={() => setModal("login")} />}
+        {screen === "customer" && <CustomerScreen />}
         {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
         {screen === "inventory" && <InventoryScreen openModal={setModal} inventory={inventory} activeAlert={activeAlert} />}
         {screen === "transfers" && <TransfersHubScreen currentUser={currentUser} />}
