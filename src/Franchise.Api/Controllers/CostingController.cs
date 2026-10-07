@@ -21,8 +21,8 @@ public class CostingController : ControllerBase
     /// <summary>
     /// Lấy danh sách toàn bộ sản phẩm kèm COGS và tỷ suất biên lợi nhuận (Gross Margin)
     /// </summary>
+    [AllowAnonymous]
     [HttpGet("products")]
-    [Authorize(Roles = "HQ_SuperAdmin,Supply_Chain_Officer,Store_Manager")]
     [ProducesResponseType(typeof(List<ProductCostingResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllProductsCosting([FromQuery] Guid? storeId, CancellationToken ct)
     {
@@ -33,8 +33,8 @@ public class CostingController : ControllerBase
     /// <summary>
     /// Phân tích chi tiết giá vốn hàng bán và cơ cấu chi phí nguyên liệu của một sản phẩm
     /// </summary>
+    [AllowAnonymous]
     [HttpGet("products/{productId:guid}")]
-    [Authorize(Roles = "HQ_SuperAdmin,Supply_Chain_Officer,Store_Manager")]
     [ProducesResponseType(typeof(ProductCostingResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProductCost(Guid productId, [FromQuery] Guid? storeId, CancellationToken ct)
@@ -46,6 +46,7 @@ public class CostingController : ControllerBase
     /// <summary>
     /// Sandbox mô phỏng công thức What-If: thử nghiệm thay đổi định lượng và giá bán để tính toán COGS và Margin tức thời (không lưu vào DB)
     /// </summary>
+    [AllowAnonymous]
     [HttpPost("simulate")]
     [ProducesResponseType(typeof(SimulateRecipeCostResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

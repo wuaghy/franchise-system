@@ -20,6 +20,7 @@ public class RecipesController : ControllerBase
         _context = context;
     }
 
+    [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(ProductRecipeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

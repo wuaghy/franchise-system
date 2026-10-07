@@ -25,6 +25,7 @@ public class KdsController : ControllerBase
     /// <summary>
     /// Lấy danh sách toàn bộ vé pha chế đang hoạt động tại quầy bar của chi nhánh (New, InPreparation, Ready).
     /// </summary>
+    [AllowAnonymous]
     [HttpGet("active")]
     [ProducesResponseType(typeof(List<KitchenTicketDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetActiveTickets([FromRoute] Guid storeId, CancellationToken ct)

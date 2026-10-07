@@ -48,9 +48,9 @@ const initialMockTransfers: StockTransferOrderDto[] = [
     transferCode: "STO-202610-0001",
     sourceWarehouseId: "11111111-1111-1111-1111-111111111111",
     sourceWarehouseName: "Kho Tổng Miền Nam",
-    destinationStoreId: "00000000-0000-0000-0000-000000000001",
+    destinationStoreId: "22222222-2222-2222-2222-222222222222",
     destinationStoreName: "Highlands Lê Lợi Q1",
-    destinationStoreCode: "HL-01",
+    destinationStoreCode: "STORE-Q1",
     status: "Dispatched",
     dispatchTrackingNumber: "VNPOST-9923841",
     dispatchedAt: "2026-10-06T08:30:00Z",
@@ -60,27 +60,27 @@ const initialMockTransfers: StockTransferOrderDto[] = [
     items: [
       {
         id: "item-1",
-        ingredientId: "ing-001",
-        ingredientCode: "ROBUSTA",
-        ingredientName: "Cà phê Robusta Hạt Đắk Lắk",
-        unit: "g",
+        ingredientId: "44444444-4444-4444-4444-444444444441",
+        ingredientCode: "BEAN-ARA",
+        ingredientName: "Arabica Coffee Beans",
+        unit: "gram",
         requestedQuantity: 20000,
         approvedQuantity: 20000,
         actualReceivedQuantity: 0,
         discrepancyQuantity: 20000,
-        unitCost: 120,
+        unitCost: 350,
       },
       {
         id: "item-2",
-        ingredientId: "ing-002",
-        ingredientCode: "COND_MILK",
-        ingredientName: "Sữa đặc Ngôi Sao Phương Nam",
+        ingredientId: "44444444-4444-4444-4444-444444444443",
+        ingredientCode: "MILK-OW",
+        ingredientName: "Oat Milk Barista",
         unit: "ml",
         requestedQuantity: 15000,
         approvedQuantity: 15000,
         actualReceivedQuantity: 0,
         discrepancyQuantity: 15000,
-        unitCost: 80,
+        unitCost: 45,
       },
     ],
   },
@@ -89,9 +89,9 @@ const initialMockTransfers: StockTransferOrderDto[] = [
     transferCode: "STO-202610-0002",
     sourceWarehouseId: "11111111-1111-1111-1111-111111111111",
     sourceWarehouseName: "Kho Tổng Miền Nam",
-    destinationStoreId: "00000000-0000-0000-0000-000000000002",
+    destinationStoreId: "33333333-3333-3333-3333-333333333333",
     destinationStoreName: "Highlands Landmark 81",
-    destinationStoreCode: "HL-02",
+    destinationStoreCode: "STORE-L81",
     status: "Submitted",
     createdAt: "2026-10-06T09:40:00Z",
     createdByUserId: "usr-02",
@@ -116,9 +116,9 @@ const initialMockTransfers: StockTransferOrderDto[] = [
     transferCode: "STO-202610-0003",
     sourceWarehouseId: "11111111-1111-1111-1111-111111111111",
     sourceWarehouseName: "Kho Tổng Miền Nam",
-    destinationStoreId: "00000000-0000-0000-0000-000000000001",
+    destinationStoreId: "22222222-2222-2222-2222-222222222222",
     destinationStoreName: "Highlands Lê Lợi Q1",
-    destinationStoreCode: "HL-01",
+    destinationStoreCode: "STORE-Q1",
     status: "DiscrepancyReported",
     dispatchTrackingNumber: "AHA-882194",
     dispatchedAt: "2026-10-05T14:00:00Z",
@@ -223,7 +223,7 @@ export function TransfersHubScreen({ currentUser }: { currentUser: User | null }
   const [selectedOrder, setSelectedOrder] = useState<StockTransferOrderDto | null>(null);
 
   // Form states
-  const [createStoreId, setCreateStoreId] = useState("00000000-0000-0000-0000-000000000001");
+  const [createStoreId, setCreateStoreId] = useState("22222222-2222-2222-2222-222222222222");
   const [createNotes, setCreateNotes] = useState("");
   const [createItems, setCreateItems] = useState<{ ingredientId: string; quantity: number }[]>([
     { ingredientId: "ing-001", quantity: 10000 },
@@ -791,8 +791,8 @@ export function TransfersHubScreen({ currentUser }: { currentUser: User | null }
                   onChange={(e) => setCreateStoreId(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-red-800"
                 >
-                  <option value="00000000-0000-0000-0000-000000000001">Highlands Lê Lợi Q1 (HL-01)</option>
-                  <option value="00000000-0000-0000-0000-000000000002">Highlands Landmark 81 (HL-02)</option>
+                  <option value="22222222-2222-2222-2222-222222222222">Highlands Lê Lợi Q1 (STORE-Q1)</option>
+                  <option value="33333333-3333-3333-3333-333333333333">Highlands Landmark 81 (STORE-L81)</option>
                 </select>
               </div>
 

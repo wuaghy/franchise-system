@@ -124,8 +124,43 @@ public static class DbSeeder
                 };
                 context.Users.Add(cashierUser);
             }
+            var supplyUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "supply_chain", ct);
+            if (supplyUser == null)
+            {
+                supplyUser = new User
+                {
+                    Username = "supply_chain",
+                    Email = "supply@franchise.vn",
+                    FullName = "Trưởng Ban Cung Ứng Chuỗi",
+                    PasswordHash = passwordHasher.HashPassword("Supply123!"),
+                    Role = UserRole.Supply_Chain_Officer,
+                    FranchiseeId = franchisee.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.Users.Add(supplyUser);
+            }
+
+            var ownerUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "owner_q1", ct);
+            if (ownerUser == null)
+            {
+                ownerUser = new User
+                {
+                    Username = "owner_q1",
+                    Email = "owner.q1@franchise.vn",
+                    FullName = "Chủ Đầu Tư Chi Nhánh Q1",
+                    PasswordHash = passwordHasher.HashPassword("Owner123!"),
+                    Role = UserRole.Franchise_Owner,
+                    StoreId = storeQ1Id,
+                    FranchiseeId = franchisee.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.Users.Add(ownerUser);
+            }
+
             await context.SaveChangesAsync(ct);
-            logger.LogInformation("DbSeeder: Seeded system accounts (admin, manager_q1, cashier_q1).");
+            logger.LogInformation("DbSeeder: Seeded system accounts (admin, manager_q1, cashier_q1, supply_chain, owner_q1).");
 
             // 4. Categories & Sample Products
             if (!await context.Categories.AnyAsync(ct))
@@ -192,7 +227,7 @@ public static class DbSeeder
                     );
                 }
 
-                // Seed Store Inventory for Store Q1
+                // Seed Store Inventory for Store Q1 & Store L81
                 var inventories = new List<StoreInventory>
                 {
                     new() { StoreId = storeQ1Id, IngredientId = ingBean.Id, CurrentStock = 14250m, MinAlertThreshold = 5000m, LastCountedAt = DateTime.UtcNow },
@@ -200,12 +235,88 @@ public static class DbSeeder
                     new() { StoreId = storeQ1Id, IngredientId = ingMilk.Id, CurrentStock = 18200m, MinAlertThreshold = 8000m, LastCountedAt = DateTime.UtcNow },
                     new() { StoreId = storeQ1Id, IngredientId = ingCheese.Id, CurrentStock = 3800m, MinAlertThreshold = 500m, LastCountedAt = DateTime.UtcNow },
                     new() { StoreId = storeQ1Id, IngredientId = ingTea.Id, CurrentStock = 8000m, MinAlertThreshold = 2000m, LastCountedAt = DateTime.UtcNow },
-                    new() { StoreId = storeQ1Id, IngredientId = ingSyrup.Id, CurrentStock = 4200m, MinAlertThreshold = 2500m, LastCountedAt = DateTime.UtcNow }
+                    new() { StoreId = storeQ1Id, IngredientId = ingSyrup.Id, CurrentStock = 4200m, MinAlertThreshold = 2500m, LastCountedAt = DateTime.UtcNow },
+
+                    new() { StoreId = storeL81Id, IngredientId = ingBean.Id, CurrentStock = 20000m, MinAlertThreshold = 5000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeL81Id, IngredientId = ingPearl.Id, CurrentStock = 5000m, MinAlertThreshold = 1000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeL81Id, IngredientId = ingMilk.Id, CurrentStock = 25000m, MinAlertThreshold = 8000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeL81Id, IngredientId = ingCheese.Id, CurrentStock = 6000m, MinAlertThreshold = 1000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeL81Id, IngredientId = ingTea.Id, CurrentStock = 12000m, MinAlertThreshold = 3000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeL81Id, IngredientId = ingSyrup.Id, CurrentStock = 6000m, MinAlertThreshold = 2500m, LastCountedAt = DateTime.UtcNow }
                 };
 
                 context.StoreInventories.AddRange(inventories);
                 await context.SaveChangesAsync(ct);
-                logger.LogInformation("DbSeeder: Seeded default Ingredients, ProductRecipes, and Store Q1 Inventories.");
+                logger.LogInformation("DbSeeder: Seeded default Ingredients, ProductRecipes, and Store Inventories.");
+            }
+
+            // 6. Central Warehouse & Warehouse Inventories
+            var centralWarehouseId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+            var centralWarehouse = await context.Warehouses.FirstOrDefaultAsync(w => w.Id == centralWarehouseId, ct);
+            if (centralWarehouse == null)
+            {
+                centralWarehouse = new Warehouse
+                {
+                    Id = centralWarehouseId,
+                    Code = "WH-CENTRAL-01",
+                    Name = "Kho Tổng Trung Tâm Miền Nam",
+                    Address = "Khu Công Nghiệp Tân Bình, Tây Thạnh, Tân Phú, TP. HCM",
+                    ContactPhone = "1900 6868",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.Warehouses.Add(centralWarehouse);
+                await context.SaveChangesAsync(ct);
+                logger.LogInformation("DbSeeder: Seeded Central Warehouse.");
+            }
+
+            if (!await context.WarehouseInventories.AnyAsync(w => w.WarehouseId == centralWarehouseId, ct))
+            {
+                var allIngredients = await context.Ingredients.ToListAsync(ct);
+                foreach (var ing in allIngredients)
+                {
+                    context.WarehouseInventories.Add(new WarehouseInventory
+                    {
+                        Id = Guid.NewGuid(),
+                        WarehouseId = centralWarehouseId,
+                        IngredientId = ing.Id,
+                        CurrentStock = 1500000m,
+                        SafetyStock = 200000m,
+                        LastRestockedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                await context.SaveChangesAsync(ct);
+                logger.LogInformation("DbSeeder: Seeded Central Warehouse Inventories.");
+            }
+
+            // 7. Store Royalty Settings (5% Royalty, 2% Marketing, 2,000,000 VND Tech Fee)
+            if (!await context.StoreRoyaltySettings.AnyAsync(ct))
+            {
+                context.StoreRoyaltySettings.AddRange(
+                    new StoreRoyaltySetting
+                    {
+                        Id = Guid.NewGuid(),
+                        StoreId = storeQ1Id,
+                        RoyaltyRate = 0.05m,
+                        MarketingFeeRate = 0.02m,
+                        TechFeeFixedMonthly = 2000000m,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new StoreRoyaltySetting
+                    {
+                        Id = Guid.NewGuid(),
+                        StoreId = storeL81Id,
+                        RoyaltyRate = 0.05m,
+                        MarketingFeeRate = 0.02m,
+                        TechFeeFixedMonthly = 2000000m,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    }
+                );
+                await context.SaveChangesAsync(ct);
+                logger.LogInformation("DbSeeder: Seeded default StoreRoyaltySettings.");
             }
         }
         catch (Exception ex)
