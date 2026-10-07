@@ -111,15 +111,15 @@ const initialMockTransfers: StockTransferOrderDto[] = [
     items: [
       {
         id: "item-3",
-        ingredientId: "ing-007",
-        ingredientCode: "AVOCADO",
-        ingredientName: "Bơ sáp 034 Đắk Nông",
-        unit: "g",
+        ingredientId: "44444444-4444-4444-4444-444444444445",
+        ingredientCode: "TEA-SEN",
+        ingredientName: "Sen Dried Tea Leaves",
+        unit: "gram",
         requestedQuantity: 10000,
         approvedQuantity: 0,
         actualReceivedQuantity: 0,
         discrepancyQuantity: 0,
-        unitCost: 150,
+        unitCost: 280,
       },
     ],
   },
@@ -137,20 +137,20 @@ const initialMockTransfers: StockTransferOrderDto[] = [
     receivedAt: "2026-10-05T16:30:00Z",
     createdAt: "2026-10-05T11:00:00Z",
     createdByUserId: "usr-01",
-    discrepancyNotes: "Vỡ 2 lon sữa đặc trong quá trình vận chuyển",
+    discrepancyNotes: "Hao hụt 800g trong quá trình vận chuyển",
     items: [
       {
         id: "item-5",
-        ingredientId: "ing-002",
-        ingredientCode: "COND_MILK",
-        ingredientName: "Sữa đặc Ngôi Sao Phương Nam",
-        unit: "ml",
+        ingredientId: "44444444-4444-4444-4444-444444444442",
+        ingredientCode: "PEARL-01",
+        ingredientName: "Black Tapioca Pearl",
+        unit: "gram",
         requestedQuantity: 10000,
         approvedQuantity: 10000,
         actualReceivedQuantity: 9200,
         discrepancyQuantity: 800,
-        unitCost: 80,
-        notes: "Vỡ lon khi ship",
+        unitCost: 150,
+        notes: "Rách bao bì khi ship",
       },
     ],
   },
@@ -171,49 +171,49 @@ const initialMockWhInventory: WarehouseInventoryDto[] = [
   {
     id: "wi-1",
     warehouseId: "11111111-1111-1111-1111-111111111111",
-    ingredientId: "ing-001",
-    ingredientCode: "ROBUSTA",
-    ingredientName: "Cà phê Robusta Hạt Đắk Lắk",
-    unit: "g",
+    ingredientId: "44444444-4444-4444-4444-444444444441",
+    ingredientCode: "BEAN-ARA",
+    ingredientName: "Arabica Coffee Beans",
+    unit: "gram",
     currentStock: 1500000,
     safetyStock: 200000,
-    unitCost: 120,
+    unitCost: 350,
     lastRestockedAt: "2026-10-05T09:00:00Z",
   },
   {
     id: "wi-2",
     warehouseId: "11111111-1111-1111-1111-111111111111",
-    ingredientId: "ing-002",
-    ingredientCode: "COND_MILK",
-    ingredientName: "Sữa đặc Ngôi Sao Phương Nam",
-    unit: "ml",
+    ingredientId: "44444444-4444-4444-4444-444444444442",
+    ingredientCode: "PEARL-01",
+    ingredientName: "Black Tapioca Pearl",
+    unit: "gram",
     currentStock: 800000,
     safetyStock: 100000,
-    unitCost: 80,
+    unitCost: 150,
     lastRestockedAt: "2026-10-05T09:00:00Z",
   },
   {
     id: "wi-3",
     warehouseId: "11111111-1111-1111-1111-111111111111",
-    ingredientId: "ing-003",
-    ingredientCode: "MATCHA",
-    ingredientName: "Bột Matcha Uji Thượng Hạng",
-    unit: "g",
-    currentStock: 45000,
+    ingredientId: "44444444-4444-4444-4444-444444444443",
+    ingredientCode: "MILK-OW",
+    ingredientName: "Oat Milk Barista",
+    unit: "ml",
+    currentStock: 450000,
     safetyStock: 50000,
-    unitCost: 550,
+    unitCost: 120,
     lastRestockedAt: "2026-10-04T11:00:00Z",
   },
   {
     id: "wi-4",
     warehouseId: "11111111-1111-1111-1111-111111111111",
-    ingredientId: "ing-007",
-    ingredientCode: "AVOCADO",
-    ingredientName: "Bơ sáp 034 Đắk Nông",
-    unit: "g",
+    ingredientId: "44444444-4444-4444-4444-444444444445",
+    ingredientCode: "TEA-SEN",
+    ingredientName: "Sen Dried Tea Leaves",
+    unit: "gram",
     currentStock: 120000,
     safetyStock: 30000,
-    unitCost: 150,
+    unitCost: 280,
     lastRestockedAt: "2026-10-06T06:00:00Z",
   },
 ];
@@ -244,7 +244,7 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
   const [createStoreId, setCreateStoreId] = useState("22222222-2222-2222-2222-222222222222");
   const [createNotes, setCreateNotes] = useState("");
   const [createItems, setCreateItems] = useState<{ ingredientId: string; quantity: number }[]>([
-    { ingredientId: "ing-001", quantity: 10000 },
+    { ingredientId: "44444444-4444-4444-4444-444444444441", quantity: 10000 },
   ]);
 
   const [approveItems, setApproveItems] = useState<{ [ingId: string]: number }>({});
@@ -260,7 +260,7 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
 
   const [inboundSupplierCode, setInboundSupplierCode] = useState("VINAMILK");
   const [inboundRef, setInboundRef] = useState("PO-202610-09");
-  const [inboundIngId, setInboundIngId] = useState("ing-002");
+  const [inboundIngId, setInboundIngId] = useState("44444444-4444-4444-4444-444444444441");
   const [inboundQty, setInboundQty] = useState(50000);
   const [inboundCost, setInboundCost] = useState(80);
 
@@ -280,7 +280,11 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
         const inv = await getWarehouseInventory(apiWh[0].id).catch(() => initialMockWhInventory);
         setWarehouseInventory(inv);
       }
-      if (apiIngs && apiIngs.length > 0) setIngredients(apiIngs);
+      if (apiIngs && apiIngs.length > 0) {
+        setIngredients(apiIngs);
+        setInboundIngId(apiIngs[0].id);
+        setCreateItems([{ ingredientId: apiIngs[0].id, quantity: 10000 }]);
+      }
       if (apiStores && apiStores.items && apiStores.items.length > 0) {
         setStores(apiStores.items.map((s) => ({ id: s.id, name: s.name, code: s.code })));
       }
@@ -837,7 +841,7 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                   <label className="text-xs font-bold text-slate-700">Danh sách nguyên vật liệu cần nhập:</label>
                   <button
                     type="button"
-                    onClick={() => setCreateItems([...createItems, { ingredientId: "ing-002", quantity: 5000 }])}
+                    onClick={() => setCreateItems([...createItems, { ingredientId: ingredients[0]?.id || "44444444-4444-4444-4444-444444444441", quantity: 5000 }])}
                     className="text-xs font-bold text-red-700 hover:underline flex items-center gap-1"
                   >
                     <Plus size={13} /> Thêm dòng
@@ -855,10 +859,15 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                         }}
                         className="flex-1 rounded-lg border border-slate-200 p-1.5 text-xs"
                       >
-                        <option value="ing-001">Cà phê Robusta Hạt</option>
-                        <option value="ing-002">Sữa đặc Ngôi Sao</option>
-                        <option value="ing-003">Bột Matcha Uji</option>
-                        <option value="ing-007">Bơ sáp 034</option>
+                        {ingredients.length > 0 ? (
+                          ingredients.map((ing) => (
+                            <option key={ing.id} value={ing.id}>
+                              {ing.name} ({ing.code} - {ing.unit})
+                            </option>
+                          ))
+                        ) : (
+                          <option value="44444444-4444-4444-4444-444444444441">Arabica Coffee Beans (BEAN-ARA)</option>
+                        )}
                       </select>
                       <input
                         type="number"
@@ -1118,10 +1127,20 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                     onChange={(e) => setInboundIngId(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 p-2 text-xs outline-none"
                   >
-                    <option value="ing-001">Cà phê Robusta Hạt</option>
-                    <option value="ing-002">Sữa đặc Ngôi Sao</option>
-                    <option value="ing-003">Bột Matcha Uji</option>
-                    <option value="ing-007">Bơ sáp 034</option>
+                    {ingredients.length > 0 ? (
+                      ingredients.map((ing) => (
+                        <option key={ing.id} value={ing.id}>
+                          {ing.name} ({ing.code} - {ing.unit})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="44444444-4444-4444-4444-444444444441">Arabica Coffee Beans (BEAN-ARA - gram)</option>
+                        <option value="44444444-4444-4444-4444-444444444442">Black Tapioca Pearl (PEARL-01 - gram)</option>
+                        <option value="44444444-4444-4444-4444-444444444443">Oat Milk Barista (MILK-OW - ml)</option>
+                        <option value="44444444-4444-4444-4444-444444444445">Sen Dried Tea Leaves (TEA-SEN - gram)</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>

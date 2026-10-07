@@ -81,11 +81,11 @@ const initialMockHeatmap: HourlySalesHeatmapDto = {
 };
 
 const initialMockProducts: ProductSalesRankDto[] = [
-  { productId: "p-01", productName: "Phin Sữa Đá Đậm Đà", sku: "CF-PHIN-01", unitsSold: 420, revenue: 16800000, estimatedCogs: 4872000, estimatedGrossProfit: 11928000, marginPercentage: 71.0, revenueSharePercentage: 28.5 },
-  { productId: "p-02", productName: "Trà Sen Vàng Củ Năng", sku: "TEA-SEN-01", unitsSold: 310, revenue: 15190000, estimatedCogs: 4557000, estimatedGrossProfit: 10633000, marginPercentage: 70.0, revenueSharePercentage: 25.7 },
-  { productId: "p-03", productName: "Freeze Trà Xanh Matcha", sku: "FRZ-MAT-01", unitsSold: 215, revenue: 12685000, estimatedCogs: 4439750, estimatedGrossProfit: 8245250, marginPercentage: 65.0, revenueSharePercentage: 21.5 },
-  { productId: "p-04", productName: "Cà Phê Muối Xứ Huế", sku: "CF-SALT-01", unitsSold: 180, revenue: 8100000, estimatedCogs: 2430000, estimatedGrossProfit: 5670000, marginPercentage: 70.0, revenueSharePercentage: 13.7 },
-  { productId: "p-05", productName: "Bánh Mì Que Pate Cay", sku: "BAK-BMQ-01", unitsSold: 240, revenue: 6000000, estimatedCogs: 2400000, estimatedGrossProfit: 3600000, marginPercentage: 60.0, revenueSharePercentage: 10.6 },
+  { productId: "p-01", productName: "Phin Sữa Đá Đậm Đà", sku: "CF-01", unitsSold: 420, revenue: 16800000, estimatedCogs: 4872000, estimatedGrossProfit: 11928000, marginPercentage: 71.0, revenueSharePercentage: 28.5 },
+  { productId: "p-02", productName: "Trà Sen Vàng Kem Cheese", sku: "TEA-01", unitsSold: 310, revenue: 15190000, estimatedCogs: 4557000, estimatedGrossProfit: 10633000, marginPercentage: 70.0, revenueSharePercentage: 25.7 },
+  { productId: "p-03", productName: "Freeze Trà Xanh Thạch", sku: "FRZ-01", unitsSold: 215, revenue: 12685000, estimatedCogs: 4439750, estimatedGrossProfit: 8245250, marginPercentage: 65.0, revenueSharePercentage: 21.5 },
+  { productId: "p-04", productName: "Cà Phê Muối Xứ Huế", sku: "CF-03", unitsSold: 180, revenue: 8100000, estimatedCogs: 2430000, estimatedGrossProfit: 5670000, marginPercentage: 70.0, revenueSharePercentage: 13.7 },
+  { productId: "p-05", productName: "Bánh Mì Que Hải Phòng Cay", sku: "BK-01", unitsSold: 240, revenue: 6000000, estimatedCogs: 2400000, estimatedGrossProfit: 3600000, marginPercentage: 60.0, revenueSharePercentage: 10.6 },
 ];
 
 const initialMockInvoices: RoyaltyInvoiceDto[] = [

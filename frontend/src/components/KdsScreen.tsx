@@ -141,7 +141,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
   const [selectedStoreId, setSelectedStoreId] = useState<string>(
     currentUser?.storeId || availableStores[0].id
   );
-  const [tickets, setTickets] = useState<KitchenTicketDto[]>(mockInitialTickets);
+  const [tickets, setTickets] = useState<KitchenTicketDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [filterView, setFilterView] = useState<"all" | "prep" | "ready">("all");

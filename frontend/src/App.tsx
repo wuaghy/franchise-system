@@ -1281,90 +1281,69 @@ function InventoryScreen({
 
 const initialMockCosting: ProductCosting[] = [
   {
-    productId: "prod-001",
-    sku: "TS-01",
-    name: "Trà Sữa Truyền Thống (Lê Lợi Flagship)",
-    sellingPrice: 35000,
-    totalCogs: 9000,
-    grossProfit: 26000,
-    grossMarginPercentage: 74.3,
-    marginStatus: "Healthy",
-    costBreakdown: [
-      { ingredientId: "ing-001", ingredientCode: "TEA", ingredientName: "Cốt trà đen Ceylon", unit: "ml", quantity: 30, unitCost: 100, totalCost: 3000, costSharePercentage: 33.3 },
-      { ingredientId: "ing-002", ingredientCode: "MILK", ingredientName: "Sữa tươi thanh trùng Dalat", unit: "ml", quantity: 50, unitCost: 120, totalCost: 6000, costSharePercentage: 66.7 },
-    ],
-  },
-  {
-    productId: "prod-002",
+    productId: "prod-cf01",
     sku: "CF-01",
-    name: "Cà Phê Sữa Đá Sài Gòn",
+    name: "Phin Sữa Đá Đậm Đà",
     sellingPrice: 29000,
-    totalCogs: 7500,
-    grossProfit: 21500,
-    grossMarginPercentage: 74.1,
+    totalCogs: 8750,
+    grossProfit: 20250,
+    grossMarginPercentage: 69.8,
     marginStatus: "Healthy",
     costBreakdown: [
-      { ingredientId: "ing-003", ingredientCode: "COFFEE", ingredientName: "Cà phê phin Đắk Lắk", unit: "g", quantity: 25, unitCost: 180, totalCost: 4500, costSharePercentage: 60.0 },
-      { ingredientId: "ing-004", ingredientCode: "CONDENSED", ingredientName: "Sữa đặc có đường", unit: "g", quantity: 33, unitCost: 90, totalCost: 3000, costSharePercentage: 40.0 },
+      { ingredientId: "44444444-4444-4444-4444-444444444441", ingredientCode: "BEAN-ARA", ingredientName: "Arabica Coffee Beans", unit: "gram", quantity: 25, unitCost: 350, totalCost: 8750, costSharePercentage: 100 },
     ],
   },
   {
-    productId: "prod-003",
-    sku: "MT-01",
-    name: "Trà Oolong Tứ Quý Kem Cheese",
-    sellingPrice: 48000,
-    totalCogs: 21500,
-    grossProfit: 26500,
-    grossMarginPercentage: 55.2,
-    marginStatus: "Warning",
+    productId: "prod-cf02",
+    sku: "CF-02",
+    name: "Bạc Xỉu Sữa Tươi 3 Tầng",
+    sellingPrice: 32000,
+    totalCogs: 12400,
+    grossProfit: 19600,
+    grossMarginPercentage: 61.3,
+    marginStatus: "Healthy",
     costBreakdown: [
-      { ingredientId: "ing-001", ingredientCode: "TEA", ingredientName: "Cốt trà Oolong Tứ Quý", unit: "ml", quantity: 40, unitCost: 150, totalCost: 6000, costSharePercentage: 27.9 },
-      { ingredientId: "ing-005", ingredientCode: "CHEESE", ingredientName: "Kem phô mai tươi Macchiato", unit: "g", quantity: 50, unitCost: 250, totalCost: 12500, costSharePercentage: 58.1 },
-      { ingredientId: "ing-006", ingredientCode: "SUGAR", ingredientName: "Nước đường mía nguyên chất", unit: "ml", quantity: 30, unitCost: 100, totalCost: 3000, costSharePercentage: 14.0 },
+      { ingredientId: "44444444-4444-4444-4444-444444444441", ingredientCode: "BEAN-ARA", ingredientName: "Arabica Coffee Beans", unit: "gram", quantity: 20, unitCost: 350, totalCost: 7000, costSharePercentage: 56.5 },
+      { ingredientId: "44444444-4444-4444-4444-444444444443", ingredientCode: "MILK-OW", ingredientName: "Oat Milk Barista", unit: "ml", quantity: 120, unitCost: 45, totalCost: 5400, costSharePercentage: 43.5 },
     ],
   },
   {
-    productId: "prod-004",
-    sku: "FR-01",
-    name: "Sinh Tố Bơ Dừa Sáp Đặc Biệt",
+    productId: "prod-tea01",
+    sku: "TEA-01",
+    name: "Trà Sen Vàng Kem Cheese",
     sellingPrice: 45000,
-    totalCogs: 26000,
-    grossProfit: 19000,
-    grossMarginPercentage: 42.2,
-    marginStatus: "Critical",
+    totalCogs: 14400,
+    grossProfit: 30600,
+    grossMarginPercentage: 68.0,
+    marginStatus: "Healthy",
     costBreakdown: [
-      { ingredientId: "ing-007", ingredientCode: "AVOCADO", ingredientName: "Bơ sáp 034 Đắk Nông", unit: "g", quantity: 120, unitCost: 150, totalCost: 18000, costSharePercentage: 69.2 },
-      { ingredientId: "ing-004", ingredientCode: "CONDENSED", ingredientName: "Sữa đặc có đường", unit: "g", quantity: 40, unitCost: 90, totalCost: 3600, costSharePercentage: 13.8 },
-      { ingredientId: "ing-002", ingredientCode: "MILK", ingredientName: "Sữa tươi thanh trùng", unit: "ml", quantity: 36, unitCost: 122, totalCost: 4400, costSharePercentage: 17.0 },
+      { ingredientId: "44444444-4444-4444-4444-444444444445", ingredientCode: "TEA-SEN", ingredientName: "Sen Dried Tea Leaves", unit: "gram", quantity: 15, unitCost: 400, totalCost: 6000, costSharePercentage: 41.7 },
+      { ingredientId: "44444444-4444-4444-4444-444444444444", ingredientCode: "CHEESE-02", ingredientName: "Sea Salt Cheese Foam", unit: "gram", quantity: 30, unitCost: 280, totalCost: 8400, costSharePercentage: 58.3 },
     ],
   },
 ];
 
 const initialMockIngredients: IngredientItem[] = [
-  { id: "ing-001", code: "TEA", name: "Cốt trà đen Ceylon", unit: "ml", standardCost: 100, createdAt: "" },
-  { id: "ing-002", code: "MILK", name: "Sữa tươi thanh trùng Dalat", unit: "ml", standardCost: 120, createdAt: "" },
-  { id: "ing-003", code: "COFFEE", name: "Cà phê phin Đắk Lắk", unit: "g", standardCost: 180, createdAt: "" },
-  { id: "ing-004", code: "CONDENSED", name: "Sữa đặc có đường", unit: "g", standardCost: 90, createdAt: "" },
-  { id: "ing-005", code: "CHEESE", name: "Kem phô mai tươi Macchiato", unit: "g", standardCost: 250, createdAt: "" },
-  { id: "ing-006", code: "SUGAR", name: "Nước đường mía nguyên chất", unit: "ml", standardCost: 100, createdAt: "" },
-  { id: "ing-007", code: "AVOCADO", name: "Bơ sáp 034 Đắk Nông", unit: "g", standardCost: 150, createdAt: "" },
-  { id: "ing-008", code: "PEARL", name: "Trân châu hoàng kim", unit: "g", standardCost: 50, createdAt: "" },
-  { id: "ing-009", code: "JELLY", name: "Thạch củ năng giòn", unit: "g", standardCost: 70, createdAt: "" },
+  { id: "44444444-4444-4444-4444-444444444441", code: "BEAN-ARA", name: "Arabica Coffee Beans", unit: "gram", standardCost: 350, createdAt: "" },
+  { id: "44444444-4444-4444-4444-444444444442", code: "PEARL-01", name: "Black Tapioca Pearl", unit: "gram", standardCost: 120, createdAt: "" },
+  { id: "44444444-4444-4444-4444-444444444443", code: "MILK-OW", name: "Oat Milk Barista", unit: "ml", standardCost: 45, createdAt: "" },
+  { id: "44444444-4444-4444-4444-444444444444", code: "CHEESE-02", name: "Sea Salt Cheese Foam", unit: "gram", standardCost: 280, createdAt: "" },
+  { id: "44444444-4444-4444-4444-444444444445", code: "TEA-SEN", name: "Sen Dried Tea Leaves", unit: "gram", standardCost: 400, createdAt: "" },
+  { id: "44444444-4444-4444-4444-444444444446", code: "SYRUP-PS", name: "Passionfruit Syrup", unit: "ml", standardCost: 80, createdAt: "" },
 ];
 
 function BomStudioScreen() {
   const [productsCosting, setProductsCosting] = useState<ProductCosting[]>(initialMockCosting);
   const [ingredients, setIngredients] = useState<IngredientItem[]>(initialMockIngredients);
-  const [selectedProductId, setSelectedProductId] = useState<string>("prod-001");
+  const [selectedProductId, setSelectedProductId] = useState<string>("prod-cf01");
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Form state cho món đang chọn
-  const [sellingPrice, setSellingPrice] = useState<number>(35000);
+  const [sellingPrice, setSellingPrice] = useState<number>(29000);
   const [recipeItems, setRecipeItems] = useState<{ ingredientId: string; quantity: number }[]>([
-    { ingredientId: "ing-001", quantity: 30 },
-    { ingredientId: "ing-002", quantity: 50 },
+    { ingredientId: "44444444-4444-4444-4444-444444444441", quantity: 25 },
   ]);
   const [selectedIngredientToAdd, setSelectedIngredientToAdd] = useState<string>("");
 
