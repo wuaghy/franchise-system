@@ -32,14 +32,21 @@ import {
   type RoyaltyInvoiceDto,
 } from "../services/reports.ts";
 import { type User } from "../services/auth.ts";
+import { api } from "../services/api.ts";
 
 interface AnalyticsHubScreenProps {
   currentUser: User | null;
 }
 
-const mockStores = [
-  { id: "22222222-2222-2222-2222-222222222222", name: "Highlands Lê Lợi Q1 (Flagship)", code: "STORE-Q1" },
-  { id: "33333333-3333-3333-3333-333333333333", name: "Highlands Landmark 81", code: "STORE-L81" },
+export interface AnalyticsStoreOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
+const defaultStores: AnalyticsStoreOption[] = [
+  { id: "22222222-2222-2222-2222-222222222222", name: "Chi nhánh Quận 1 (Flagship Store)", code: "STORE-Q1" },
+  { id: "33333333-3333-3333-3333-333333333333", name: "Chi nhánh Landmark 81", code: "STORE-L81" },
 ];
 
 // Fallback initial data for presentation if offline
@@ -134,8 +141,9 @@ const initialMockInvoices: RoyaltyInvoiceDto[] = [
 
 export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
   const isHQAdmin = !currentUser?.storeId || currentUser?.role === "HQ_SuperAdmin";
+  const [stores, setStores] = useState<AnalyticsStoreOption[]>(defaultStores);
   const [selectedStoreId, setSelectedStoreId] = useState<string>(
-    currentUser?.storeId || mockStores[0].id
+    currentUser?.storeId || defaultStores[0].id
   );
   const [dateRange, setDateRange] = useState<"today" | "7d" | "30d">("30d");
   const [activeTab, setActiveTab] = useState<"overview" | "heatmap" | "royalty">("overview");
@@ -152,6 +160,33 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [genYear, setGenYear] = useState(2026);
   const [genMonth, setGenMonth] = useState(10);
+
+  // Load dynamic stores list from backend API
+  useEffect(() => {
+    let isMounted = true;
+    api
+      .getStores(1, 100)
+      .then((res) => {
+        if (!isMounted || !res?.items || res.items.length === 0) return;
+        const mapped: AnalyticsStoreOption[] = res.items.map((s) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+        }));
+        setStores(mapped);
+        if (!currentUser?.storeId) {
+          setSelectedStoreId((curr) => {
+            const exists = mapped.some((m) => m.id === curr);
+            return exists ? curr : mapped[0].id;
+          });
+        }
+      })
+      .catch((err) => console.warn("Could not load backend stores for AnalyticsHub:", err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser]);
 
   const loadData = async () => {
     setLoading(true);
@@ -173,7 +208,7 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
       if (sumRes.status === "fulfilled") setSummary(sumRes.value);
       if (heatRes.status === "fulfilled") setHeatmap(heatRes.value);
       if (prodRes.status === "fulfilled") setProducts(prodRes.value);
-      if (invRes.status === "fulfilled" && invRes.value.length > 0) setInvoices(invRes.value);
+      if (invRes.status === "fulfilled") setInvoices(invRes.value);
 
       if (isHQAdmin) {
         const netRes = await reportsService.getNetworkOverview(fromDate).catch(() => null);
@@ -201,7 +236,7 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
       setShowGenerateModal(false);
     } catch {
       // Local optimistic fallback
-      const storeObj = mockStores.find((s) => s.id === selectedStoreId) || mockStores[0];
+      const storeObj = stores.find((s) => s.id === selectedStoreId) || stores[0];
       const fallbackInv: RoyaltyInvoiceDto = {
         id: `inv-${Date.now()}`,
         invoiceNumber: `ROY-${genYear}${genMonth.toString().padStart(2, "0")}-${storeObj.code}`,
@@ -314,7 +349,7 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
               onChange={(e) => setSelectedStoreId(e.target.value)}
               className="bg-transparent font-bold text-slate-800 outline-none"
             >
-              {mockStores.map((s) => (
+              {stores.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.code} - {s.name}
                 </option>
