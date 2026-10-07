@@ -24,6 +24,7 @@ public class ProductsController : ControllerBase
     /// <summary>
     /// Lấy danh sách sản phẩm trong toàn hệ thống
     /// </summary>
+    [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(List<ProductResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetProducts([FromQuery] Guid? categoryId, [FromQuery] bool? isAvailable)
@@ -63,6 +64,7 @@ public class ProductsController : ControllerBase
     /// <summary>
     /// Lấy thông tin chi tiết một sản phẩm theo ID
     /// </summary>
+    [AllowAnonymous]
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

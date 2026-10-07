@@ -22,6 +22,26 @@ import {
 } from "lucide-react";
 import { API_BASE } from "../config/api.ts";
 import { audioNotifier } from "../services/audioNotification.ts";
+import { api, type CheckoutOrderPayload } from "../services/api.ts";
+
+const DB_PRODUCT_MAPPING: Record<string, string> = {
+  "cf-01": "09ffff04-0f0b-4200-994a-d7decc20d2cc", // Phin Sữa Đá Đậm Đà
+  "cf-02": "9398818e-183c-4b68-8780-42719896f4b5", // Cà Phê Muối Xứ Huế
+  "cf-03": "dd5dbb7a-938a-4cad-bfb3-658b36e9a5e5", // Bạc Xỉu Sữa Tươi 3 Tầng
+  "cf-04": "09ffff04-0f0b-4200-994a-d7decc20d2cc",
+  "cf-05": "09ffff04-0f0b-4200-994a-d7decc20d2cc",
+  "mt-01": "8009ae26-207a-4a4e-9ee0-0e0819b17737", // Trà Sen Vàng Kem Cheese
+  "mt-02": "8009ae26-207a-4a4e-9ee0-0e0819b17737",
+  "mt-03": "8009ae26-207a-4a4e-9ee0-0e0819b17737",
+  "ft-01": "55c9b685-7d0b-4dac-8a51-a3ec01949fd6", // Trà Đào Cam Sả Tươi
+  "ft-02": "55c9b685-7d0b-4dac-8a51-a3ec01949fd6",
+  "ft-03": "55c9b685-7d0b-4dac-8a51-a3ec01949fd6",
+  "frz-01": "577d3866-b7c3-4189-8e7f-2340224991de", // Freeze Trà Xanh Thạch
+  "frz-02": "577d3866-b7c3-4189-8e7f-2340224991de",
+  "bk-01": "5753143c-abcf-4ce2-b57d-b96f62c13ae2", // Bánh Mì Que Hải Phòng Cay
+  "bk-02": "5753143c-abcf-4ce2-b57d-b96f62c13ae2",
+  "bk-03": "5753143c-abcf-4ce2-b57d-b96f62c13ae2",
+};
 
 export interface MenuItem {
   id: string;
@@ -386,12 +406,43 @@ export function CustomerScreen() {
     setIsSubmitting(true);
 
     try {
+      let finalOrderCode = orderCode;
+      try {
+        const checkoutPayload: CheckoutOrderPayload = {
+          storeId: "22222222-2222-2222-2222-222222222222",
+          orderType: orderType === "dine-in" ? 0 : 1,
+          paymentMethod: 2, // VietQR Napas
+          items: cart.map((c) => ({
+            productId: DB_PRODUCT_MAPPING[c.item.id] || "09ffff04-0f0b-4200-994a-d7decc20d2cc",
+            quantity: c.quantity,
+            specialNote: c.customization
+              ? `Size ${c.customization.size}, Đá ${c.customization.ice}, Đường ${c.customization.sugar}${
+                  c.customization.note ? ` - ${c.customization.note}` : ""
+                }`
+              : undefined,
+            modifiers:
+              c.customization?.toppings?.map((t) => ({
+                name: t,
+                extraPrice: TOPPING_OPTIONS.find((top) => top.id === t)?.price || 10000,
+                consumptionQuantity: 25,
+              })) || [],
+          })),
+        };
+
+        const res = await api.checkout(checkoutPayload);
+        if (res?.orderNumber) {
+          finalOrderCode = res.orderNumber;
+        }
+      } catch (checkoutErr) {
+        console.warn("Backend checkout call failed, continuing with online order announcement:", checkoutErr);
+      }
+
       // Call announcement API on cloud backend
       await fetch(`${API_BASE}/orders/announce`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orderNumber: orderCode,
+          orderNumber: finalOrderCode,
           finalAmount: totalAmount,
           type: "OnlineOrder",
           customerName: customerName || (orderType === "dine-in" ? tableNumber : "Khách mang đi"),
@@ -401,10 +452,10 @@ export function CustomerScreen() {
       // Trigger Web Audio Ting-Ting chime
       audioNotifier.playOrderChime("urgent");
       setTimeout(() => {
-        audioNotifier.speakAnnouncement("Đơn hàng mới từ khách hàng trực tuyến");
+        audioNotifier.speakAnnouncement("Đơn hàng mới từ khách hàng trực tuyến " + finalOrderCode.slice(-4));
       }, 500);
 
-      setSuccessOrderNumber(orderCode);
+      setSuccessOrderNumber(finalOrderCode);
       setShowQrModal(false);
       setCart([]);
     } catch {

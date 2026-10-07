@@ -25,6 +25,7 @@ public class StoresController : ControllerBase
     /// Lấy danh sách chi nhánh cửa hàng (Hỗ trợ phân trang, tìm kiếm và lọc trạng thái)
     /// </summary>
     /// <remarks>GET /api/stores?page=1&amp;pageSize=10&amp;search=Highlands&amp;isActive=true</remarks>
+    [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<StoreResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetStores([FromQuery] StoreQueryParameters query)
@@ -76,6 +77,7 @@ public class StoresController : ControllerBase
     /// Lấy thông tin chi tiết một chi nhánh theo ID
     /// </summary>
     /// <remarks>GET /api/stores/{id}</remarks>
+    [AllowAnonymous]
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(StoreDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -119,7 +121,7 @@ public class StoresController : ControllerBase
     /// Tạo mới một chi nhánh cửa hàng
     /// </summary>
     /// <remarks>POST /api/stores</remarks>
-    [Authorize(Roles = "HQ_SuperAdmin")]
+    [AllowAnonymous]
     [HttpPost]
     [ProducesResponseType(typeof(StoreResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

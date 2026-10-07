@@ -90,6 +90,13 @@ import {
   type Screen,
   type Portal,
 } from "./services/rbac.ts";
+import {
+  api,
+  type CheckoutOrderPayload,
+  type CheckoutResponse,
+  type DeductedIngredient,
+} from "./services/api.ts";
+import { ReceiptModal, type ReceiptData } from "./components/ReceiptModal.tsx";
 
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
@@ -1687,17 +1694,77 @@ function BomStudioScreen() {
   );
 }
 
-const products = [
-  { id: 1, name: "Phin Sữa Đá", category: "Coffee", sku: "CF-PHIN-01", price: 29000, image: "https://images.unsplash.com/photo-1650527122326-0abd4c8c0f99?auto=format&fit=crop&w=700&q=85" },
-  { id: 2, name: "Caramel Macchiato", category: "Coffee", sku: "CF-MAC-02", price: 49000, image: "https://images.unsplash.com/photo-1687902625864-faedb40f83a8?auto=format&fit=crop&w=700&q=85" },
-  { id: 3, name: "Trà Sữa Trân Châu", category: "Milk Tea", sku: "MT-PEARL-01", price: 45000, image: "https://images.unsplash.com/photo-1601919764353-922faa5c0eb4?auto=format&fit=crop&w=700&q=85" },
-  { id: 4, name: "Berry Matcha Cloud", category: "Milk Tea", sku: "MT-MAT-04", price: 55000, image: "https://images.unsplash.com/photo-1786602181711-b9ebb69caf3c?auto=format&fit=crop&w=700&q=85" },
-  { id: 5, name: "Trà Đào Cam Sả", category: "Fruit Tea", sku: "FT-PEACH-02", price: 49000, image: "https://images.unsplash.com/photo-1761335831408-c8c3e16c2c1d?auto=format&fit=crop&w=700&q=85" },
-  { id: 6, name: "Butter Croissant", category: "Pastry", sku: "PA-CRO-01", price: 35000, image: "https://images.unsplash.com/photo-1612737144187-d51c1483225a?auto=format&fit=crop&w=700&q=85" },
+export interface PosProduct {
+  id: string;
+  name: string;
+  category: string;
+  sku: string;
+  price: number;
+  image: string;
+}
+
+const defaultPosProducts: PosProduct[] = [
+  {
+    id: "09ffff04-0f0b-4200-994a-d7decc20d2cc",
+    name: "Phin Sữa Đá Đậm Đà",
+    category: "Coffee",
+    sku: "CF-01",
+    price: 29000,
+    image: "https://images.unsplash.com/photo-1650527122326-0abd4c8c0f99?auto=format&fit=crop&w=700&q=85",
+  },
+  {
+    id: "dd5dbb7a-938a-4cad-bfb3-658b36e9a5e5",
+    name: "Bạc Xỉu Sữa Tươi 3 Tầng",
+    category: "Coffee",
+    sku: "CF-02",
+    price: 32000,
+    image: "https://images.unsplash.com/photo-1687902625864-faedb40f83a8?auto=format&fit=crop&w=700&q=85",
+  },
+  {
+    id: "9398818e-183c-4b68-8780-42719896f4b5",
+    name: "Cà Phê Muối Xứ Huế",
+    category: "Coffee",
+    sku: "CF-03",
+    price: 35000,
+    image: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=700&q=85",
+  },
+  {
+    id: "8009ae26-207a-4a4e-9ee0-0e0819b17737",
+    name: "Trà Sen Vàng Kem Cheese",
+    category: "Tea",
+    sku: "TEA-01",
+    price: 45000,
+    image: "https://images.unsplash.com/photo-1601919764353-922faa5c0eb4?auto=format&fit=crop&w=700&q=85",
+  },
+  {
+    id: "55c9b685-7d0b-4dac-8a51-a3ec01949fd6",
+    name: "Trà Đào Cam Sả Tươi",
+    category: "Tea",
+    sku: "TEA-02",
+    price: 45000,
+    image: "https://images.unsplash.com/photo-1761335831408-c8c3e16c2c1d?auto=format&fit=crop&w=700&q=85",
+  },
+  {
+    id: "577d3866-b7c3-4189-8e7f-2340224991de",
+    name: "Freeze Trà Xanh Thạch",
+    category: "Freeze",
+    sku: "FRZ-01",
+    price: 55000,
+    image: "https://images.unsplash.com/photo-1786602181711-b9ebb69caf3c?auto=format&fit=crop&w=700&q=85",
+  },
+  {
+    id: "5753143c-abcf-4ce2-b57d-b96f62c13ae2",
+    name: "Bánh Mì Que Hải Phòng Cay",
+    category: "Bakery",
+    sku: "BK-01",
+    price: 19000,
+    image: "https://images.unsplash.com/photo-1612737144187-d51c1483225a?auto=format&fit=crop&w=700&q=85",
+  },
 ];
 
 interface CartItem {
-  id: number;
+  id: string;
+  productId: string;
   name: string;
   price: number;
   quantity: number;
@@ -1705,17 +1772,50 @@ interface CartItem {
   toppings: string[];
 }
 
-function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
+function PosScreen({
+  openModal,
+  currentUser,
+  onCheckoutSuccess,
+}: {
+  openModal: (modal: Modal) => void;
+  currentUser: User | null;
+  onCheckoutSuccess: (receipt: ReceiptData) => void;
+}) {
   const [category, setCategory] = useState("All");
+  const [productList] = useState<PosProduct[]>(defaultPosProducts);
   const [cart, setCart] = useState<CartItem[]>([
-    { id: 1, name: "Phin Sữa Đá", price: 29000, quantity: 1, size: "M", toppings: ["Black pearl"] },
-    { id: 4, name: "Berry Matcha Cloud", price: 55000, quantity: 1, size: "L", toppings: ["Cheese foam"] },
+    {
+      id: "init-1",
+      productId: "09ffff04-0f0b-4200-994a-d7decc20d2cc",
+      name: "Phin Sữa Đá Đậm Đà",
+      price: 29000,
+      quantity: 1,
+      size: "M",
+      toppings: ["Black pearl"],
+    },
+    {
+      id: "init-2",
+      productId: "577d3866-b7c3-4189-8e7f-2340224991de",
+      name: "Freeze Trà Xanh Thạch",
+      price: 55000,
+      quantity: 1,
+      size: "L",
+      toppings: ["Cheese foam"],
+    },
   ]);
   const [payment, setPayment] = useState<Payment>("Cash");
   const [orderType, setOrderType] = useState("Take-away");
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
   const [offlineCount, setOfflineCount] = useState<number>(() => getPendingOfflineOrderCount());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [ticketSeq, setTicketSeq] = useState(() => Math.floor(100 + Math.random() * 900));
+
+  const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";
+  const effectiveStoreName =
+    currentUser?.storeId === "33333333-3333-3333-3333-333333333333"
+      ? "Chi nhánh Landmark 81"
+      : "Chi nhánh Quận 1 (Flagship Store)";
+  const cashierDisplayName = currentUser?.fullName || currentUser?.username || "Linh (Thu ngân 01)";
 
   useEffect(() => {
     const handleOnline = () => {
@@ -1730,7 +1830,7 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    const cleanupSync = initOfflineSyncListeners("00000000-0000-0000-0000-000000000001", () => {
+    const cleanupSync = initOfflineSyncListeners(effectiveStoreId, () => {
       setOfflineCount(getPendingOfflineOrderCount());
     });
 
@@ -1739,28 +1839,48 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
       window.removeEventListener("offline", handleOffline);
       cleanupSync();
     };
-  }, []);
+  }, [effectiveStoreId]);
 
-  const filtered = category === "All" ? products : products.filter((product) => product.category === category);
+  const filtered = category === "All" ? productList : productList.filter((product) => product.category === category);
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity + item.toppings.length * 10000, 0);
   const vat = Math.round(subtotal * 0.08);
   const total = subtotal + vat;
 
-  const add = (product: (typeof products)[number]) =>
+  const currentOrderCode = useMemo(
+    () => `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${ticketSeq}`,
+    [ticketSeq]
+  );
+
+  const add = (product: PosProduct) =>
     setCart((items) => {
-      const current = items.find((item) => item.id === product.id);
+      const current = items.find((item) => item.productId === product.id && item.size === "M");
       return current
-        ? items.map((item) => (item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item))
-        : [...items, { id: product.id, name: product.name, price: product.price, quantity: 1, size: "M", toppings: [] }];
+        ? items.map((item) => (item.id === current.id ? { ...item, quantity: item.quantity + 1 } : item))
+        : [
+            ...items,
+            {
+              id: `${product.id}-${Date.now()}`,
+              productId: product.id,
+              name: product.name,
+              price: product.price,
+              quantity: 1,
+              size: "M",
+              toppings: [],
+            },
+          ];
     });
 
-  const updateQty = (id: number, delta: number) =>
-    setCart((items) => items.map((item) => (item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item)));
+  const updateQty = (id: string, delta: number) =>
+    setCart((items) =>
+      items
+        .map((item) => (item.id === id ? { ...item, quantity: item.quantity + delta } : item))
+        .filter((item) => item.quantity > 0)
+    );
 
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      const res = await syncPendingOfflineOrders("00000000-0000-0000-0000-000000000001");
+      const res = await syncPendingOfflineOrders(effectiveStoreId);
       setOfflineCount(getPendingOfflineOrderCount());
       alert(`Đồng bộ thành công: ${res.successfulCount} đơn mới, ${res.duplicateSkippedCount} đơn đã tồn tại.`);
     } catch (err: any) {
@@ -1770,8 +1890,11 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
     }
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!cart.length) return;
+
+    const mappedOrderType = orderType === "Dine-in" ? 0 : 1;
+    const mappedPaymentMethod = payment === "Cash" ? 0 : payment === "Credit Card" ? 1 : 2;
 
     if (!isOnline) {
       const offlineOrderId = `OFF-${Date.now()}`;
@@ -1779,16 +1902,134 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
       const offlineOrder: OfflineOrderSyncItem = {
         offlineOrderId,
         idempotencyKey,
-        storeId: "00000000-0000-0000-0000-000000000001",
-        paymentMethod: payment === "Cash" ? 0 : payment === "Credit Card" ? 1 : 2,
-        orderType: orderType === "Dine-in" ? 0 : 1,
+        storeId: effectiveStoreId,
+        paymentMethod: mappedPaymentMethod,
+        orderType: mappedOrderType,
         subtotal,
         discountAmount: 0,
         vatAmount: vat,
         finalAmount: total,
         offlineCreatedAt: new Date().toISOString(),
         items: cart.map((item) => ({
-          productId: "00000000-0000-0000-0000-000000000001",
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          specialNote: item.size ? `Size ${item.size}` : undefined,
+          modifiers: item.toppings.map((t) => ({
+            name: t,
+            extraPrice: 10000,
+            consumptionQuantity: 25,
+          })),
+        })),
+      };
+
+      enqueueOfflineOrder(offlineOrder);
+      setOfflineCount(getPendingOfflineOrderCount());
+
+      const offlineReceipt: ReceiptData = {
+        orderId: offlineOrderId,
+        orderNumber: offlineOrderId,
+        subtotal,
+        vatAmount: vat,
+        finalAmount: total,
+        createdAt: new Date().toISOString(),
+        paymentMethod: payment,
+        orderType: orderType,
+        storeName: effectiveStoreName,
+        storeAddress: "12 Lê Lợi, P. Bến Nghé, Quận 1, TP. HCM",
+        storePhone: "028 3822 1234",
+        cashierName: cashierDisplayName,
+        counterName: "Counter 03 · Shift A",
+        items: cart.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          size: i.size,
+          toppings: i.toppings,
+        })),
+        isOffline: true,
+      };
+
+      audioNotifier.playOrderChime("standard");
+      setCart([]);
+      setTicketSeq((seq) => seq + 1);
+      onCheckoutSuccess(offlineReceipt);
+      return;
+    }
+
+    try {
+      setIsSyncing(true);
+      const payload: CheckoutOrderPayload = {
+        storeId: effectiveStoreId,
+        cashierId: currentUser?.id,
+        orderType: mappedOrderType,
+        paymentMethod: mappedPaymentMethod,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          specialNote: item.size ? `Size ${item.size}` : undefined,
+          modifiers: item.toppings.map((t) => ({
+            name: t,
+            extraPrice: 10000,
+            consumptionQuantity: 25,
+          })),
+        })),
+      };
+
+      const result = await api.checkout(payload);
+
+      const receipt: ReceiptData = {
+        orderId: result.orderId,
+        orderNumber: result.orderNumber,
+        subtotal: result.subtotal,
+        vatAmount: result.vatAmount,
+        finalAmount: result.finalAmount,
+        createdAt: result.createdAt,
+        paymentMethod: payment,
+        orderType: orderType,
+        storeName: effectiveStoreName,
+        storeAddress: "12 Lê Lợi, P. Bến Nghé, Quận 1, TP. HCM",
+        storePhone: "028 3822 1234",
+        cashierName: cashierDisplayName,
+        counterName: "Counter 03 · Shift A",
+        items: cart.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          size: i.size,
+          toppings: i.toppings,
+        })),
+        deductedIngredients: result.deductedIngredients,
+        isOffline: false,
+      };
+
+      audioNotifier.playOrderChime("standard");
+      setTimeout(() => {
+        audioNotifier.speakAnnouncement(
+          `Thanh toán thành công đơn hàng số ${result.orderNumber.slice(-4)}`
+        );
+      }, 350);
+
+      setCart([]);
+      setTicketSeq((seq) => seq + 1);
+      onCheckoutSuccess(receipt);
+    } catch (err: any) {
+      console.warn("API checkout failed, falling back to offline queue:", err);
+      const offlineOrderId = `OFF-${Date.now()}`;
+      const idempotencyKey = `POS-OFF-${offlineOrderId}`;
+      const offlineOrder: OfflineOrderSyncItem = {
+        offlineOrderId,
+        idempotencyKey,
+        storeId: effectiveStoreId,
+        paymentMethod: mappedPaymentMethod,
+        orderType: mappedOrderType,
+        subtotal,
+        discountAmount: 0,
+        vatAmount: vat,
+        finalAmount: total,
+        offlineCreatedAt: new Date().toISOString(),
+        items: cart.map((item) => ({
+          productId: item.productId,
           quantity: item.quantity,
           unitPrice: item.price,
           specialNote: item.size,
@@ -1802,13 +2043,37 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
 
       enqueueOfflineOrder(offlineOrder);
       setOfflineCount(getPendingOfflineOrderCount());
-      alert(`[Chế độ Ngoại Tuyến] Đã lưu đơn #${offlineOrderId} vào máy POS. Hệ thống sẽ tự động đồng bộ khi có Internet.`);
-      setCart([]);
-      openModal("receipt");
-      return;
-    }
 
-    openModal("receipt");
+      const offlineReceipt: ReceiptData = {
+        orderId: offlineOrderId,
+        orderNumber: offlineOrderId,
+        subtotal,
+        vatAmount: vat,
+        finalAmount: total,
+        createdAt: new Date().toISOString(),
+        paymentMethod: payment,
+        orderType: orderType,
+        storeName: effectiveStoreName,
+        storeAddress: "12 Lê Lợi, P. Bến Nghé, Quận 1, TP. HCM",
+        storePhone: "028 3822 1234",
+        cashierName: cashierDisplayName,
+        counterName: "Counter 03 · Shift A",
+        items: cart.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          size: i.size,
+          toppings: i.toppings,
+        })),
+        isOffline: true,
+      };
+
+      setCart([]);
+      setTicketSeq((seq) => seq + 1);
+      onCheckoutSuccess(offlineReceipt);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -1865,7 +2130,7 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
           </div>
         )}
         <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          {["All", "Coffee", "Milk Tea", "Fruit Tea", "Pastry"].map((item) => (
+          {["All", "Coffee", "Tea", "Freeze", "Bakery"].map((item) => (
             <button
               key={item}
               onClick={() => setCategory(item)}
@@ -1881,10 +2146,7 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
           {filtered.map((product) => (
             <motion.article layout key={product.id} className="group overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/60">
               <button
-                onClick={() => {
-                  add(product);
-                  openModal("modifier");
-                }}
+                onClick={() => add(product)}
                 className="w-full text-left"
               >
                 <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
@@ -1914,7 +2176,7 @@ function PosScreen({ openModal }: { openModal: (modal: Modal) => void }) {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Current ticket</p>
-              <h2 className="mt-0.5 font-mono text-sm font-black text-slate-900">#ORD-20261005-0842</h2>
+              <h2 className="mt-0.5 font-mono text-sm font-black text-slate-900">#{currentOrderCode}</h2>
             </div>
             <Button variant="ghost" className="!size-9 !min-h-9 !p-0">
               <MoreHorizontal size={18} />
@@ -2458,13 +2720,49 @@ function ModalContent({
   modal,
   close,
   onLoginSuccess,
+  receiptData,
 }: {
   modal: Exclude<Modal, null>;
   close: () => void;
   onLoginSuccess: (user: User) => void;
+  receiptData: ReceiptData | null;
 }) {
   if (modal === "login") {
     return <LoginModal onClose={close} onSuccess={onLoginSuccess} />;
+  }
+  if (modal === "receipt") {
+    const fallbackReceipt: ReceiptData = {
+      orderId: "demo-ord-01",
+      orderNumber: "ORD-20261007-0001",
+      subtotal: 94000,
+      vatAmount: 7520,
+      finalAmount: 101520,
+      createdAt: new Date().toISOString(),
+      paymentMethod: "Cash",
+      orderType: "Take-away",
+      storeName: "Chi nhánh Quận 1 (Flagship Store)",
+      storeAddress: "12 Lê Lợi, Bến Nghé, Quận 1, TP. HCM",
+      storePhone: "028 3822 1234",
+      cashierName: "Linh (Thu ngân 01)",
+      counterName: "Counter 03 · Shift A",
+      items: [
+        { name: "Phin Sữa Đá Đậm Đà", quantity: 1, price: 29000, size: "M", toppings: ["Black pearl"] },
+        { name: "Freeze Trà Xanh Thạch", quantity: 1, price: 55000, size: "L", toppings: ["Cheese foam"] },
+      ],
+      deductedIngredients: [
+        { ingredientId: "ing-1", ingredientName: "Cà phê hạt Robusta", quantityDeducted: 36, balanceAfter: 14214 },
+        { ingredientId: "ing-2", ingredientName: "Sữa tươi thanh trùng", quantityDeducted: 180, balanceAfter: 18020 },
+        { ingredientId: "ing-3", ingredientName: "Trân châu đen", quantityDeducted: 25, balanceAfter: 1485 },
+      ],
+    };
+
+    return (
+      <ReceiptModal
+        receipt={receiptData || fallbackReceipt}
+        onClose={close}
+        onNewOrder={close}
+      />
+    );
   }
   if (modal === "store")
     return (
@@ -2590,62 +2888,7 @@ function ModalContent({
         </div>
       </ModalShell>
     );
-  return (
-    <ModalShell onClose={close}>
-      <div className="overflow-hidden rounded-2xl">
-        <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 px-6 py-8 text-center text-white">
-          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.15 }} className="mx-auto grid size-16 place-items-center rounded-full bg-white/15 ring-1 ring-white/20">
-            <CheckCircle2 size={34} />
-          </motion.span>
-          <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-100">Payment approved</p>
-          <h2 className="mt-1 text-2xl font-black">₫101,520</h2>
-          <p className="mt-1 font-mono text-xs text-emerald-100">#ORD-20261005-0842</p>
-        </div>
-        <div className="space-y-4 p-6">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-slate-50 p-3">
-              <p className="text-[9px] font-bold uppercase text-slate-400">Method</p>
-              <p className="mt-1 text-xs font-extrabold text-slate-800">Cash · Exact</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-3">
-              <p className="text-[9px] font-bold uppercase text-slate-400">Processed</p>
-              <p className="mt-1 text-xs font-extrabold text-slate-800">10:42:18 AM</p>
-            </div>
-          </div>
-          <div>
-            <p className="mb-2 text-xs font-extrabold text-slate-800">Inventory deductions</p>
-            {[
-              ["Black pearl", "−25g", "1,485g left"],
-              ["Coffee beans", "−36g", "14,214g left"],
-              ["Oat milk", "−180ml", "18,020ml left"],
-            ].map(([name, used, left]) => (
-              <div key={name} className="flex items-center justify-between border-b border-slate-100 py-2 text-xs">
-                <span className="font-semibold text-slate-600">{name}</span>
-                <span className="font-mono text-slate-500">
-                  {used} · <b className="text-slate-800">{left}</b>
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-            <Wifi size={17} className="mt-0.5 shrink-0 text-emerald-700" />
-            <div>
-              <p className="text-xs font-extrabold text-emerald-800">Transactional outbox confirmed</p>
-              <p className="mt-0.5 text-[10px] leading-relaxed text-emerald-700">Payment, order and inventory events synced successfully.</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button>
-              <ReceiptText size={16} /> Print receipt
-            </Button>
-            <Button variant="primary" onClick={close}>
-              New order <ArrowUpRight size={15} />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </ModalShell>
-  );
+  return null;
 }
 
 export default function App() {
@@ -2656,6 +2899,7 @@ export default function App() {
   const [inventory, setInventory] = useState<InventoryRecord[]>(initialInventory);
   const [activeAlert, setActiveAlert] = useState<LowStockAlertNotification | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
   // Announcement & Notification State
   const [notifications, setNotifications] = useState<SystemNotification[]>([
@@ -2847,7 +3091,16 @@ export default function App() {
         {screen === "inventory" && <InventoryScreen openModal={setModal} inventory={inventory} activeAlert={activeAlert} />}
         {screen === "transfers" && <TransfersHubScreen currentUser={currentUser} />}
         {screen === "bom-studio" && <BomStudioScreen />}
-        {screen === "pos" && <PosScreen openModal={setModal} />}
+        {screen === "pos" && (
+          <PosScreen
+            openModal={setModal}
+            currentUser={currentUser}
+            onCheckoutSuccess={(rec) => {
+              setReceiptData(rec);
+              setModal("receipt");
+            }}
+          />
+        )}
         {screen === "kds" && <KdsScreen currentUser={currentUser} />}
         {screen === "analytics" && <AnalyticsHubScreen currentUser={currentUser} />}
       </div>
@@ -2856,6 +3109,7 @@ export default function App() {
           <ModalContent
             modal={modal}
             close={() => setModal(null)}
+            receiptData={receiptData}
             onLoginSuccess={(u) => {
               setCurrentUser(u);
               realtimeHub.start();

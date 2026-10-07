@@ -87,6 +87,27 @@ export interface CheckoutResponse {
   createdAt: string;
   deductedIngredients: DeductedIngredient[];
 }
+
+export interface ProductItem {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  sku: string;
+  name: string;
+  basePrice: number;
+  isAvailable: boolean;
+  createdAt: string;
+}
+
+export interface IngredientItem {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+  standardCost: number;
+  createdAt: string;
+}
+
 import { API_BASE } from '../config/api.ts';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -168,6 +189,20 @@ export const api = {
     });
     if (note) params.append('note', note);
     return fetchJson(`${API_BASE}/payments/vietqr?${params.toString()}`);
+  },
+
+  // Products & Menu Catalogue
+  async getProducts(categoryId?: string, isAvailable?: boolean): Promise<ProductItem[]> {
+    const params = new URLSearchParams();
+    if (categoryId) params.append('categoryId', categoryId);
+    if (isAvailable !== undefined) params.append('isAvailable', String(isAvailable));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return fetchJson<ProductItem[]>(`${API_BASE}/products${query}`);
+  },
+
+  // Ingredients Catalogue
+  async getIngredients(): Promise<IngredientItem[]> {
+    return fetchJson<IngredientItem[]>(`${API_BASE}/ingredients`);
   },
 };
 

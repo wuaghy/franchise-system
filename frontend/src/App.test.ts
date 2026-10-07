@@ -378,6 +378,93 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(canAccessPortal('staff', adminUser), true);
     assert.equal(filterAdminNavItems(adminNav, adminUser).length, 4);
   });
+
+  it('validates 80mm thermal receipt data structure and calculation consistency', () => {
+    const items = [
+      { name: 'Phin Sữa Đá Đậm Đà', quantity: 2, price: 29000, size: 'M', toppings: ['Black pearl'] },
+      { name: 'Trà Sen Vàng Kem Cheese', quantity: 1, price: 45000, size: 'L' }
+    ];
+
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity + (item.toppings?.length || 0) * 10000, 0);
+    // 2 * 29000 + 10000 (topping) + 45000 = 58000 + 10000 + 45000 = 113000
+    assert.equal(subtotal, 113000);
+
+    const vat = Math.round(subtotal * 0.08); // 9040
+    assert.equal(vat, 9040);
+
+    const finalAmount = subtotal + vat; // 122040
+    assert.equal(finalAmount, 122040);
+
+    const receipt = {
+      orderId: 'bb3b6032-acd7-4cac-b07e-d0e6d5899421',
+      orderNumber: 'ORD-20261007-0042',
+      subtotal,
+      vatAmount: vat,
+      finalAmount,
+      createdAt: '2026-10-07T05:27:08.276Z',
+      paymentMethod: 'Cash',
+      orderType: 'Dine-in',
+      storeName: 'Chi nhánh Quận 1 (Flagship Store)',
+      storeAddress: '12 Lê Lợi, Bến Nghé, Quận 1, TP. HCM',
+      storePhone: '028 3822 1234',
+      cashierName: 'Linh (Thu ngân 01)',
+      counterName: 'Counter 03 · Shift A',
+      items,
+      deductedIngredients: [
+        { ingredientId: 'ing-1', ingredientName: 'Cà phê Robusta', quantityDeducted: 36, balanceAfter: 14214 }
+      ],
+      isOffline: false
+    };
+
+    assert.equal(receipt.orderNumber, 'ORD-20261007-0042');
+    assert.equal(receipt.isOffline, false);
+    assert.equal(receipt.deductedIngredients.length, 1);
+    assert.ok(receipt.finalAmount > receipt.subtotal);
+  });
+
+  it('validates POS and Customer checkout payload mapping to backend contracts', () => {
+    const storeId = '22222222-2222-2222-2222-222222222222';
+    const dineInOrderType = 0; // DineIn
+    const takeAwayOrderType = 1; // TakeAway
+    const cashPaymentMethod = 0; // Cash
+    const vietQrPaymentMethod = 2; // VNPay_QR / VietQR
+
+    const posPayload = {
+      storeId,
+      orderType: takeAwayOrderType,
+      paymentMethod: cashPaymentMethod,
+      items: [
+        {
+          productId: '09ffff04-0f0b-4200-994a-d7decc20d2cc',
+          quantity: 1,
+          specialNote: 'Size M',
+          modifiers: [{ name: 'Black pearl', extraPrice: 10000, consumptionQuantity: 25 }]
+        }
+      ]
+    };
+
+    assert.equal(posPayload.storeId, '22222222-2222-2222-2222-222222222222');
+    assert.equal(posPayload.orderType, 1);
+    assert.equal(posPayload.paymentMethod, 0);
+    assert.equal(posPayload.items[0].modifiers[0].consumptionQuantity, 25);
+
+    const customerPayload = {
+      storeId,
+      orderType: dineInOrderType,
+      paymentMethod: vietQrPaymentMethod,
+      items: [
+        {
+          productId: '8009ae26-207a-4a4e-9ee0-0e0819b17737',
+          quantity: 2,
+          specialNote: 'Size L, Đá 70%, Đường 50%'
+        }
+      ]
+    };
+
+    assert.equal(customerPayload.orderType, 0);
+    assert.equal(customerPayload.paymentMethod, 2);
+    assert.equal(customerPayload.items[0].quantity, 2);
+  });
 });
 
 

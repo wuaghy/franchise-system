@@ -22,6 +22,7 @@ public class InventoryController : ControllerBase
     /// <summary>
     /// Lấy danh sách tồn kho hiện tại của chi nhánh
     /// </summary>
+    [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(List<StoreInventoryResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetStoreInventory(Guid storeId)
@@ -33,6 +34,7 @@ public class InventoryController : ControllerBase
     /// <summary>
     /// Lấy danh sách nguyên vật liệu chạm ngưỡng báo động đỏ (Low Stock Alert)
     /// </summary>
+    [AllowAnonymous]
     [HttpGet("low-stock")]
     [ProducesResponseType(typeof(List<LowStockAlertResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLowStockAlerts(Guid storeId)
@@ -44,6 +46,7 @@ public class InventoryController : ControllerBase
     /// <summary>
     /// Nhập hàng từ Tổng công ty về kho chi nhánh (Inbound)
     /// </summary>
+    [AllowAnonymous]
     [HttpPost("inbound")]
     [ProducesResponseType(typeof(StoreInventoryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

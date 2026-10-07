@@ -153,6 +153,60 @@ public static class DbSeeder
                 await context.SaveChangesAsync(ct);
                 logger.LogInformation("DbSeeder: Seeded default Categories & Products.");
             }
+
+            // 5. Default Ingredients & Recipes & Store Inventories
+            if (!await context.Ingredients.AnyAsync(ct))
+            {
+                var ingBean = new Ingredient { Id = Guid.Parse("44444444-4444-4444-4444-444444444441"), Code = "BEAN-ARA", Name = "Arabica Coffee Beans", Unit = "gram", StandardCost = 350, CreatedAt = DateTime.UtcNow };
+                var ingPearl = new Ingredient { Id = Guid.Parse("44444444-4444-4444-4444-444444444442"), Code = "PEARL-01", Name = "Black Tapioca Pearl", Unit = "gram", StandardCost = 120, CreatedAt = DateTime.UtcNow };
+                var ingMilk = new Ingredient { Id = Guid.Parse("44444444-4444-4444-4444-444444444443"), Code = "MILK-OW", Name = "Oat Milk Barista", Unit = "ml", StandardCost = 45, CreatedAt = DateTime.UtcNow };
+                var ingCheese = new Ingredient { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Code = "CHEESE-02", Name = "Sea Salt Cheese Foam", Unit = "gram", StandardCost = 280, CreatedAt = DateTime.UtcNow };
+                var ingTea = new Ingredient { Id = Guid.Parse("44444444-4444-4444-4444-444444444445"), Code = "TEA-SEN", Name = "Sen Dried Tea Leaves", Unit = "gram", StandardCost = 400, CreatedAt = DateTime.UtcNow };
+                var ingSyrup = new Ingredient { Id = Guid.Parse("44444444-4444-4444-4444-444444444446"), Code = "SYRUP-PS", Name = "Passionfruit Syrup", Unit = "ml", StandardCost = 80, CreatedAt = DateTime.UtcNow };
+
+                context.Ingredients.AddRange(ingBean, ingPearl, ingMilk, ingCheese, ingTea, ingSyrup);
+                await context.SaveChangesAsync(ct);
+
+                // Seed Recipes for CF-01, CF-02, TEA-01
+                var cf01 = await context.Products.FirstOrDefaultAsync(p => p.Sku == "CF-01", ct);
+                if (cf01 != null)
+                {
+                    context.ProductRecipes.Add(new ProductRecipe { ProductId = cf01.Id, IngredientId = ingBean.Id, Quantity = 25 });
+                }
+
+                var cf02 = await context.Products.FirstOrDefaultAsync(p => p.Sku == "CF-02", ct);
+                if (cf02 != null)
+                {
+                    context.ProductRecipes.AddRange(
+                        new ProductRecipe { ProductId = cf02.Id, IngredientId = ingBean.Id, Quantity = 20 },
+                        new ProductRecipe { ProductId = cf02.Id, IngredientId = ingMilk.Id, Quantity = 120 }
+                    );
+                }
+
+                var tea01 = await context.Products.FirstOrDefaultAsync(p => p.Sku == "TEA-01", ct);
+                if (tea01 != null)
+                {
+                    context.ProductRecipes.AddRange(
+                        new ProductRecipe { ProductId = tea01.Id, IngredientId = ingTea.Id, Quantity = 15 },
+                        new ProductRecipe { ProductId = tea01.Id, IngredientId = ingCheese.Id, Quantity = 30 }
+                    );
+                }
+
+                // Seed Store Inventory for Store Q1
+                var inventories = new List<StoreInventory>
+                {
+                    new() { StoreId = storeQ1Id, IngredientId = ingBean.Id, CurrentStock = 14250m, MinAlertThreshold = 5000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeQ1Id, IngredientId = ingPearl.Id, CurrentStock = 2500m, MinAlertThreshold = 50m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeQ1Id, IngredientId = ingMilk.Id, CurrentStock = 18200m, MinAlertThreshold = 8000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeQ1Id, IngredientId = ingCheese.Id, CurrentStock = 3800m, MinAlertThreshold = 500m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeQ1Id, IngredientId = ingTea.Id, CurrentStock = 8000m, MinAlertThreshold = 2000m, LastCountedAt = DateTime.UtcNow },
+                    new() { StoreId = storeQ1Id, IngredientId = ingSyrup.Id, CurrentStock = 4200m, MinAlertThreshold = 2500m, LastCountedAt = DateTime.UtcNow }
+                };
+
+                context.StoreInventories.AddRange(inventories);
+                await context.SaveChangesAsync(ct);
+                logger.LogInformation("DbSeeder: Seeded default Ingredients, ProductRecipes, and Store Q1 Inventories.");
+            }
         }
         catch (Exception ex)
         {

@@ -20,6 +20,7 @@ public class IngredientsController : ControllerBase
         _context = context;
     }
 
+    [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(List<IngredientResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetIngredients()
