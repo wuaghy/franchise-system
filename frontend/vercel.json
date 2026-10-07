@@ -5,6 +5,18 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "http://192.9.185.53:8080/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "http://192.9.185.53:8080/health"
+    },
+    {
+      "source": "/hubs/:path*",
+      "destination": "http://192.9.185.53:8080/hubs/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

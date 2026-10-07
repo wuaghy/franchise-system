@@ -145,15 +145,20 @@ app.UseMiddleware<Franchise.Api.Middleware.RequestTimingMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-// 7. TỰ ĐỘNG TẠO BẢNG TRONG DATABASE KHI KHỞI ĐỘNG (Auto-Migration)
+// 7. TỰ ĐỘNG TẠO BẢNG TRONG DATABASE KHI KHỞI ĐỘNG (Auto-Migration & Seed)
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
     if (dbContext.Database.IsRelational())
     {
         dbContext.Database.Migrate();
     }
+    await DbSeeder.SeedAsync(dbContext, passwordHasher, logger);
 }
+
 
 if (app.Environment.IsDevelopment())
 {

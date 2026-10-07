@@ -10,6 +10,15 @@
  *   All requests and SignalR WebSockets will communicate directly with the production backend.
  */
 
-export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-export const API_BASE = `${BACKEND_URL}/api`;
-export const HUB_URL = `${BACKEND_URL}/hubs/franchise`;
+const rawUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+// If page is served over HTTPS and backend URL is HTTP, use relative proxy to avoid Mixed Content blocks
+const isMixedContent =
+  typeof window !== 'undefined' &&
+  window.location.protocol === 'https:' &&
+  rawUrl.startsWith('http://');
+
+export const BACKEND_URL = isMixedContent ? '' : rawUrl;
+export const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api` : '/api';
+export const HUB_URL = BACKEND_URL ? `${BACKEND_URL}/hubs/franchise` : '/hubs/franchise';
+
