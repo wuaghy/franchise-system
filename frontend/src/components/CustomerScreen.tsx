@@ -14,107 +14,254 @@ import {
   MapPin,
   UtensilsCrossed,
   Volume2,
+  X,
+  ChevronDown,
+  Flame,
+  Award,
+  SlidersHorizontal,
 } from "lucide-react";
 import { API_BASE } from "../config/api.ts";
 import { audioNotifier } from "../services/audioNotification.ts";
 
-interface MenuItem {
+export interface MenuItem {
   id: string;
   name: string;
-  category: "coffee" | "milktea" | "fruit_tea" | "bakery";
+  category: "coffee" | "milktea" | "fruit_tea" | "freeze" | "bakery";
   price: number;
   image: string;
   description: string;
   isPopular?: boolean;
+  isSignature?: boolean;
+  tag?: string;
+  allowCustomization?: boolean;
 }
 
-const MENU_DATA: MenuItem[] = [
+export const MENU_DATA: MenuItem[] = [
+  // Cà Phê (Highlands & Trung Nguyên)
   {
     id: "cf-01",
-    name: "Cà Phê Muối Đặc Biệt",
+    name: "Phin Sữa Đá Đậm Vị",
     category: "coffee",
-    price: 35000,
+    price: 32000,
     image: "☕",
-    description: "Cốt cà phê Robusta truyền thống kết hợp lớp kem béo mặn sánh mịn độc quyền.",
+    description: "Cốt cà phê Robusta Buôn Ma Thuột ủ phin truyền thống, sữa đặc béo ngậy đậm đà.",
     isPopular: true,
+    tag: "Best Seller",
+    allowCustomization: true,
   },
   {
     id: "cf-02",
-    name: "Bạc Xỉu Sữa Tươi Kem Trứng",
+    name: "Cà Phê Muối Kem Béo",
+    category: "coffee",
+    price: 35000,
+    image: "🧂",
+    description: "Cốt cà phê phin kết hợp lớp kem phô mai béo mặn sánh mịn độc quyền.",
+    isSignature: true,
+    tag: "Khuyên Thử",
+    allowCustomization: true,
+  },
+  {
+    id: "cf-03",
+    name: "Bạc Xỉu 3 Tầng Kem Trứng",
     category: "coffee",
     price: 38000,
     image: "🥛",
     description: "Sữa đặc béo thơm, sữa tươi thanh trùng và lớp foam cà phê sóng sánh.",
+    isPopular: true,
+    allowCustomization: true,
   },
   {
-    id: "cf-03",
+    id: "cf-04",
+    name: "PhinDi Hạnh Nhân Kem Sữa",
+    category: "coffee",
+    price: 45000,
+    image: "🌰",
+    description: "Cà phê phin hiện đại hòa quyện sốt hạnh nhân thơm bùi và lớp kem sữa mềm mượt.",
+    isPopular: true,
+    tag: "Giới Trẻ",
+    allowCustomization: true,
+  },
+  {
+    id: "cf-05",
     name: "Cold Brew Cam Vàng Hạnh Nhân",
     category: "coffee",
     price: 45000,
     image: "🍊",
-    description: "Cà phê ủ lạnh 16 tiếng mát lành, lát cam vàng mọng nước sảng khoái.",
-    isPopular: true,
+    description: "Cà phê ủ lạnh 16 tiếng thanh khiết, lát cam vàng mọng nước giải nhiệt sảng khoái.",
+    allowCustomization: true,
   },
+
+  // Trà Sữa & Trà Sen (Phúc Long & Highlands)
   {
     id: "mt-01",
-    name: "Trà Sữa Oolong Nướng Trân Châu",
+    name: "Trà Sen Vàng Hạt Sen Kem Cheese",
     category: "milktea",
-    price: 42000,
-    image: "🧋",
-    description: "Trà Oolong sao đậm lửa, sữa béo đậm đà kèm trân châu đen hoàng kim dẻo dai.",
+    price: 49000,
+    image: "🪷",
+    description: "Trà Ô long thanh mát, hạt sen tươi rim đường phèn bùi ngậy và kem cheese mặn mà.",
+    isSignature: true,
     isPopular: true,
+    tag: "Signature Số 1",
+    allowCustomization: true,
   },
   {
     id: "mt-02",
+    name: "Trà Sữa Oolong Nướng Đậm Vị",
+    category: "milktea",
+    price: 42000,
+    image: "🧋",
+    description: "Trà Oolong sao đậm lửa chuẩn Phúc Long style, sữa béo ngậy kèm trân châu đen dai giòn.",
+    isPopular: true,
+    tag: "Đậm Vị Trà",
+    allowCustomization: true,
+  },
+  {
+    id: "mt-03",
     name: "Hồng Trà Sữa Kem Cheese Macchiato",
     category: "milktea",
     price: 45000,
     image: "🧀",
-    description: "Hồng trà Shan tuyết cổ thụ với lớp kem phô mai New Zealand sánh đặc ngậy vị.",
+    description: "Hồng trà Shan tuyết cổ thụ với lớp kem phô mai New Zealand sánh đặc thơm ngậy.",
+    allowCustomization: true,
   },
+
+  // Trà Trái Cây Tươi
   {
     id: "ft-01",
     name: "Trà Đào Cam Sả Tươi",
     category: "fruit_tea",
-    price: 40000,
+    price: 45000,
     image: "🍑",
-    description: "Đào miếng giòn rụm, hương cam tươi thơm lừng hòa quyện tinh chất sả thanh mát.",
+    description: "Đào miếng giòn rụm ngâm nước đường, hương cam tươi thơm lừng hòa quyện tinh chất sả.",
     isPopular: true,
+    tag: "Thanh Mát",
+    allowCustomization: true,
   },
   {
     id: "ft-02",
-    name: "Trà Dâu Tằm Mận Đỏ Hạt Chia",
+    name: "Trà Ổi Hồng Dâu Tây Hạt Chia",
     category: "fruit_tea",
     price: 42000,
     image: "🍓",
-    description: "Dâu tằm ngâm đường phèn ngọt dịu, bổ sung hạt chia giàu dinh dưỡng.",
+    description: "Ổi hồng thơm ngát, dâu tây đỏ mọng ngâm thanh nhiệt, hạt chia dinh dưỡng.",
+    allowCustomization: true,
   },
   {
+    id: "ft-03",
+    name: "Trà Thanh Đào Thạch Củ Năng",
+    category: "fruit_tea",
+    price: 45000,
+    image: "🧃",
+    description: "Vị trà đào thanh khiết kết hợp thạch củ năng giòn sần sật vui miệng.",
+    allowCustomization: true,
+  },
+
+  // Freeze & Đá Xay (Highlands Style)
+  {
+    id: "fz-01",
+    name: "Freeze Trà Xanh Matcha Thạch",
+    category: "freeze",
+    price: 55000,
+    image: "🍵",
+    description: "Matcha Nhật Bản xay tuyết nhuyễn mịn, kèm thạch trà xanh giòn và lớp kem whipping béo ngậy.",
+    isPopular: true,
+    tag: "Đá Xay Hot",
+    allowCustomization: true,
+  },
+  {
+    id: "fz-02",
+    name: "Caramel Phin Freeze Thạch Cà Phê",
+    category: "freeze",
+    price: 55000,
+    image: "🍮",
+    description: "Cốt cà phê phin đá xay cùng sốt sốt caramel ngọt ngào, thạch cà phê giòn dai rụm.",
+    isSignature: true,
+    allowCustomization: true,
+  },
+  {
+    id: "fz-03",
+    name: "Cookies & Cream Bánh Quy Freeze",
+    category: "freeze",
+    price: 55000,
+    image: "🍪",
+    description: "Bánh quy sô-cô-la xay giòn rụm cùng sữa béo ngọt ngào, topping vụn oreo thơm lừng.",
+    allowCustomization: true,
+  },
+
+  // Bánh Mì & Bánh Ngọt Ăn Kèm
+  {
     id: "bk-01",
-    name: "Bánh Croissant Trứng Muối Tan Chảy",
+    name: "Bánh Mì Que Hải Phòng Pate Tiêu",
     category: "bakery",
-    price: 32000,
-    image: "🥐",
-    description: "Vỏ ngàn lớp giòn tan nướng bơ Pháp thơm lừng, nhân sốt trứng muối béo mặn.",
+    price: 19000,
+    image: "🥖",
+    description: "Bánh mì que nướng lò giòn rụm, nhân pate gan đậm đà béo ngậy kèm tương ớt Chí Chương cay nồng.",
+    isPopular: true,
+    tag: "Combo Ăn Kèm",
+    allowCustomization: false,
   },
   {
     id: "bk-02",
-    name: "Bánh Tiramisu Cacao Đậm Vị",
+    name: "Croissant Bơ Pháp Trứng Muối",
     category: "bakery",
-    price: 45000,
+    price: 35000,
+    image: "🥐",
+    description: "Vỏ ngàn lớp giòn tan nướng bơ Pháp thơm lừng, nhân sốt trứng muối tan chảy béo mặn.",
+    allowCustomization: false,
+  },
+  {
+    id: "bk-03",
+    name: "Bánh Mousse Đào Thạch Trái Cây",
+    category: "bakery",
+    price: 38000,
     image: "🍰",
-    description: "Cốt bánh ladyfinger thấm đẫm cà phê espresso và kem mascarpone mịn màng.",
+    description: "Lớp mousse đào ngọt thanh mát lạnh tan ngay trong miệng, đế bánh mềm mịn.",
+    allowCustomization: false,
+  },
+  {
+    id: "bk-04",
+    name: "Tiramisu Cacao Đậm Vị",
+    category: "bakery",
+    price: 42000,
+    image: "🍫",
+    description: "Cốt bánh thấm đẫm cà phê espresso, lớp kem mascarpone mịn màng phủ bột cacao nguyên chất.",
+    allowCustomization: false,
   },
 ];
 
-interface CartItem {
-  item: MenuItem;
-  quantity: number;
+export interface ToppingOption {
+  id: string;
+  name: string;
+  price: number;
+}
+
+export const TOPPING_OPTIONS: ToppingOption[] = [
+  { id: "top-lotus", name: "Hạt sen tươi rim đường", price: 10000 },
+  { id: "top-chestnut", name: "Thạch củ năng giòn", price: 10000 },
+  { id: "top-cheese", name: "Kem Cheese Macchiato", price: 12000 },
+  { id: "top-pearl", name: "Trân châu trắng giòn", price: 8000 },
+  { id: "top-coffee-jelly", name: "Thạch cà phê giòn", price: 10000 },
+  { id: "top-peach", name: "Đào miếng giòn rụm", price: 12000 },
+];
+
+export interface CustomizationState {
+  size: "S" | "M" | "L";
+  ice: "100%" | "70%" | "0%" | "hot";
+  sugar: "100%" | "70%" | "50%" | "0%";
+  toppings: string[];
   note: string;
 }
 
+export interface CartItem {
+  cartId: string;
+  item: MenuItem;
+  quantity: number;
+  customization?: CustomizationState;
+  finalPricePerUnit: number;
+}
+
 export function CustomerScreen() {
-  const [selectedCategory, setSelectedCategory] = useState<"all" | "coffee" | "milktea" | "fruit_tea" | "bakery">("all");
+  const [selectedCategory, setSelectedCategory] = useState<"all" | "coffee" | "milktea" | "fruit_tea" | "freeze" | "bakery">("all");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<"dine-in" | "take-away">("dine-in");
   const [customerName, setCustomerName] = useState("");
@@ -123,25 +270,101 @@ export function CustomerScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrderNumber, setSuccessOrderNumber] = useState<string | null>(null);
 
-  const filteredMenu = selectedCategory === "all" ? MENU_DATA : MENU_DATA.filter((i) => i.category === selectedCategory);
+  // Customization Modal State
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  const [customState, setCustomState] = useState<CustomizationState>({
+    size: "M",
+    ice: "100%",
+    sugar: "100%",
+    toppings: [],
+    note: "",
+  });
 
-  const totalAmount = cart.reduce((sum, c) => sum + c.item.price * c.quantity, 0);
+  const filteredMenu =
+    selectedCategory === "all" ? MENU_DATA : MENU_DATA.filter((i) => i.category === selectedCategory);
 
-  const addToCart = (item: MenuItem) => {
-    setCart((prev) => {
-      const existing = prev.find((c) => c.item.id === item.id);
-      if (existing) {
-        return prev.map((c) => (c.item.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
-      }
-      return [...prev, { item, quantity: 1, note: "" }];
+  const totalAmount = cart.reduce((sum, c) => sum + c.finalPricePerUnit * c.quantity, 0);
+
+  // Open customization modal
+  const handleStartAdd = (item: MenuItem) => {
+    if (!item.allowCustomization) {
+      // Add directly if bakery/ready items
+      addToCartDirect(item);
+      return;
+    }
+    setCustomizingItem(item);
+    setCustomState({
+      size: "M",
+      ice: "100%",
+      sugar: "100%",
+      toppings: [],
+      note: "",
     });
   };
 
-  const updateQuantity = (itemId: string, delta: number) => {
+  const addToCartDirect = (item: MenuItem) => {
+    setCart((prev) => {
+      const existing = prev.find((c) => c.item.id === item.id && !c.customization);
+      if (existing) {
+        return prev.map((c) =>
+          c.cartId === existing.cartId ? { ...c, quantity: c.quantity + 1 } : c
+        );
+      }
+      return [
+        ...prev,
+        {
+          cartId: `${item.id}-${Date.now()}`,
+          item,
+          quantity: 1,
+          finalPricePerUnit: item.price,
+        },
+      ];
+    });
+  };
+
+  // Calculate customized price
+  const calculateModalPrice = () => {
+    if (!customizingItem) return 0;
+    let price = customizingItem.price;
+    if (customState.size === "M") price += 6000;
+    if (customState.size === "L") price += 12000;
+    for (const tId of customState.toppings) {
+      const found = TOPPING_OPTIONS.find((t) => t.id === tId);
+      if (found) price += found.price;
+    }
+    return price;
+  };
+
+  const handleConfirmCustomization = () => {
+    if (!customizingItem) return;
+    const finalPricePerUnit = calculateModalPrice();
+    const cartId = `${customizingItem.id}-${customState.size}-${customState.ice}-${customState.sugar}-${customState.toppings.sort().join(",")}`;
+
+    setCart((prev) => {
+      const existing = prev.find((c) => c.cartId === cartId);
+      if (existing) {
+        return prev.map((c) => (c.cartId === cartId ? { ...c, quantity: c.quantity + 1 } : c));
+      }
+      return [
+        ...prev,
+        {
+          cartId,
+          item: customizingItem,
+          quantity: 1,
+          customization: { ...customState },
+          finalPricePerUnit,
+        },
+      ];
+    });
+
+    setCustomizingItem(null);
+  };
+
+  const updateQuantity = (cartId: string, delta: number) => {
     setCart((prev) =>
       prev
         .map((c) => {
-          if (c.item.id === itemId) {
+          if (c.cartId === cartId) {
             const newQty = c.quantity + delta;
             return newQty > 0 ? { ...c, quantity: newQty } : null;
           }
@@ -163,7 +386,7 @@ export function CustomerScreen() {
     setIsSubmitting(true);
 
     try {
-      // Gọi API announce lên Cloud backend để phát chuông
+      // Call announcement API on cloud backend
       await fetch(`${API_BASE}/orders/announce`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -175,7 +398,7 @@ export function CustomerScreen() {
         }),
       }).catch(() => null);
 
-      // Kích hoạt chuông âm thanh trên trình duyệt
+      // Trigger Web Audio Ting-Ting chime
       audioNotifier.playOrderChime("urgent");
       setTimeout(() => {
         audioNotifier.speakAnnouncement("Đơn hàng mới từ khách hàng trực tuyến");
@@ -192,49 +415,69 @@ export function CustomerScreen() {
   };
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-6 lg:px-8">
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-900 via-rose-900 to-slate-900 p-6 lg:p-10 text-white shadow-md mb-8">
+    <div className="mx-auto max-w-[1600px] px-3 py-4 sm:px-4 sm:py-6 lg:px-8">
+      {/* Header Banner - Inspired by Highlands & Trung Nguyên Legend */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-900 via-rose-900 to-slate-900 p-6 lg:p-8 text-white shadow-md mb-6">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur-md mb-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur-md mb-2">
               <Sparkles size={14} className="text-amber-400" />
-              <span>Tiệm Cà Phê Nhượng Quyền Enterprise · Chi Nhánh 01</span>
+              <span>Cổng Đặt Món Khách Hàng · Highlands Lê Lợi Q1</span>
             </div>
-            <h1 className="text-2xl lg:text-4xl font-black tracking-tight">Thực Đơn Đặt Món Trực Tuyến</h1>
-            <p className="mt-2 text-sm text-rose-100/80 font-normal">
-              Chọn món yêu thích, thanh toán quét mã VietQR Napas 247 và nhận đồ nhanh chóng tại quầy.
+            <h1 className="text-2xl lg:text-3xl font-black tracking-tight">Thực Đơn Đặt Món & Tự Phục Vụ</h1>
+            <p className="mt-1.5 text-xs sm:text-sm text-rose-100/80 font-normal max-w-xl">
+              Chọn món tùy chỉnh size, đường, đá, quét mã VietQR Napas 247 và nhận thông báo chuông tức thì tại quầy Barista.
             </p>
           </div>
-          <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/10">
-            <MapPin size={18} className="text-amber-400 shrink-0" />
-            <div className="text-xs">
-              <div className="font-bold">Bàn Phục Vụ: {tableNumber}</div>
-              <div className="text-slate-300">Wifi: Franchise_Guest (Pass: 88888888)</div>
+
+          {/* Dine-in Table Selector / Wifi Info */}
+          <div className="flex flex-wrap items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/10">
+            <div className="flex items-center gap-2 text-xs">
+              <MapPin size={16} className="text-amber-400 shrink-0" />
+              <div>
+                <span className="text-slate-300 block text-[10px]">Vị trí đặt món:</span>
+                <select
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  className="bg-transparent font-bold text-white text-xs outline-none cursor-pointer"
+                >
+                  <option value="Bàn 01" className="text-slate-900">Bàn 01 (Tầng trệt)</option>
+                  <option value="Bàn 02" className="text-slate-900">Bàn 02 (Cửa sổ)</option>
+                  <option value="Bàn 03" className="text-slate-900">Bàn 03 (Sân vườn)</option>
+                  <option value="Bàn 05" className="text-slate-900">Bàn 05 (Trung tâm)</option>
+                  <option value="Bàn 08" className="text-slate-900">Bàn 08 (Tầng 1)</option>
+                  <option value="Bàn 10" className="text-slate-900">Bàn 10 (Góc yên tĩnh)</option>
+                </select>
+              </div>
+            </div>
+            <div className="hidden sm:block border-l border-white/20 pl-3 text-[11px] text-slate-300">
+              <div>Wifi: <b className="text-white">Highlands_Guest</b></div>
+              <div>Pass: <b className="text-white">88888888</b></div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Grid: Menu vs Cart */}
-      <div className="grid gap-8 lg:grid-cols-12">
+      <div className="grid gap-6 lg:grid-cols-12">
         {/* Left: Category Filter & Menu Grid (8 Cols) */}
         <div className="lg:col-span-8">
           {/* Category Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
+          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-none">
             {[
               { id: "all", label: "Tất cả món" },
-              { id: "coffee", label: "Cà phê pha máy & thủ công" },
-              { id: "milktea", label: "Trà sữa đậm vị" },
-              { id: "fruit_tea", label: "Trà trái cây nhiệt đới" },
-              { id: "bakery", label: "Bánh ngọt & ăn kèm" },
+              { id: "coffee", label: "☕ Cà phê Phin & Máy" },
+              { id: "milktea", label: "🧋 Trà Sen & Trà Sữa" },
+              { id: "fruit_tea", label: "🍑 Trà Trái Cây Tươi" },
+              { id: "freeze", label: "🍧 Freeze Đá Xay" },
+              { id: "bakery", label: "🥐 Bánh Mì & Bánh Ngọt" },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setSelectedCategory(tab.id as any)}
-                className={`shrink-0 rounded-2xl px-5 py-2.5 text-xs font-bold transition ${
+                className={`shrink-0 rounded-2xl px-4 py-2.5 text-xs font-bold transition whitespace-nowrap ${
                   selectedCategory === tab.id
-                    ? "bg-red-700 text-white shadow-md shadow-red-900/20"
+                    ? "bg-red-800 text-white shadow-md shadow-red-900/20"
                     : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50"
                 }`}
               >
@@ -244,25 +487,29 @@ export function CustomerScreen() {
           </div>
 
           {/* Menu Cards */}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {filteredMenu.map((item) => (
               <motion.div
                 key={item.id}
-                whileHover={{ y: -3 }}
-                className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-red-200 hover:shadow-md"
+                whileHover={{ y: -2 }}
+                className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs transition hover:border-red-200 hover:shadow-md"
               >
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="grid size-12 place-items-center rounded-2xl bg-slate-100 text-2xl group-hover:scale-110 transition">
                       {item.image}
                     </span>
-                    {item.isPopular && (
-                      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-black uppercase text-amber-700 border border-amber-200/60">
-                        Bán Chạy
+                    {item.tag && (
+                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase border ${
+                        item.isSignature 
+                          ? "bg-red-50 text-red-700 border-red-200" 
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}>
+                        {item.tag}
                       </span>
                     )}
                   </div>
-                  <h3 className="mt-4 text-base font-black text-slate-900 group-hover:text-red-700 transition">
+                  <h3 className="mt-3.5 text-sm sm:text-base font-black text-slate-900 group-hover:text-red-700 transition">
                     {item.name}
                   </h3>
                   <p className="mt-1 text-xs text-slate-500 font-normal leading-relaxed line-clamp-2">
@@ -270,16 +517,20 @@ export function CustomerScreen() {
                   </p>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-3">
-                  <div className="text-sm font-black text-red-700">
-                    {item.price.toLocaleString("vi-VN")} đ
+                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Giá từ:</span>
+                    <span className="text-sm sm:text-base font-black text-red-800">
+                      {item.price.toLocaleString("vi-VN")} đ
+                    </span>
                   </div>
                   <button
-                    onClick={() => addToCart(item)}
-                    className="flex size-9 items-center justify-center rounded-xl bg-slate-100 text-slate-800 hover:bg-red-700 hover:text-white transition active:scale-90"
-                    title="Thêm vào giỏ"
+                    onClick={() => handleStartAdd(item)}
+                    className="flex h-9 items-center gap-1.5 rounded-xl bg-red-50 px-3 text-xs font-bold text-red-800 hover:bg-red-800 hover:text-white transition active:scale-95"
+                    title={item.allowCustomization ? "Tùy biến món & thêm giỏ" : "Thêm vào giỏ"}
                   >
-                    <Plus size={18} />
+                    <Plus size={15} />
+                    <span>{item.allowCustomization ? "Chọn món" : "Thêm"}</span>
                   </button>
                 </div>
               </motion.div>
@@ -287,25 +538,25 @@ export function CustomerScreen() {
           </div>
         </div>
 
-        {/* Right: Cart Drawer / Sidebar (4 Cols) */}
+        {/* Right: Cart Drawer (4 Cols) */}
         <div className="lg:col-span-4">
-          <div className="sticky top-20 rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="sticky top-20 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <ShoppingBag size={20} className="text-red-700" />
+                <ShoppingBag size={18} className="text-red-800" />
                 <h2 className="text-base font-black text-slate-900">Giỏ Hàng Của Bạn</h2>
               </div>
-              <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-black text-red-700">
+              <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-black text-red-800">
                 {cart.reduce((s, c) => s + c.quantity, 0)} món
               </span>
             </div>
 
             {/* Order Type Toggle */}
-            <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+            <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-2xl bg-slate-100 p-1">
               <button
                 onClick={() => setOrderType("dine-in")}
                 className={`rounded-xl py-2 text-xs font-bold transition ${
-                  orderType === "dine-in" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                  orderType === "dine-in" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >
                 Dùng Tại Quán
@@ -313,7 +564,7 @@ export function CustomerScreen() {
               <button
                 onClick={() => setOrderType("take-away")}
                 className={`rounded-xl py-2 text-xs font-bold transition ${
-                  orderType === "take-away" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                  orderType === "take-away" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >
                 Mang Về (Take-Away)
@@ -321,39 +572,66 @@ export function CustomerScreen() {
             </div>
 
             {/* Cart Items List */}
-            <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto pr-1">
+            <div className="mt-3.5 max-h-[340px] space-y-2.5 overflow-y-auto pr-1">
               {cart.length === 0 ? (
-                <div className="py-12 text-center text-slate-400">
-                  <UtensilsCrossed size={36} className="mx-auto mb-2 opacity-40" />
-                  <p className="text-xs font-semibold">Chưa có món nào trong giỏ hàng</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Hãy bấm dấu (+) bên menu để chọn món nhé!</p>
+                <div className="py-10 text-center text-slate-400">
+                  <UtensilsCrossed size={32} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-xs font-semibold">Giỏ hàng đang trống</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Chọn món ngon từ thực đơn bên trái để bắt đầu nhé!</p>
                 </div>
               ) : (
                 cart.map((c) => (
                   <div
-                    key={c.item.id}
-                    className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/50 p-3"
+                    key={c.cartId}
+                    className="flex flex-col gap-1.5 rounded-2xl border border-slate-100 bg-slate-50/60 p-3"
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-black text-slate-900">{c.item.name}</div>
-                      <div className="text-[11px] font-bold text-red-700">
-                        {c.item.price.toLocaleString("vi-VN")} đ
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-black text-slate-900">{c.item.name}</div>
+                        {c.customization && (
+                          <div className="text-[10px] text-slate-500 font-medium space-x-1.5 mt-0.5">
+                            <span className="font-bold text-red-800">Size {c.customization.size}</span>
+                            <span>•</span>
+                            <span>{c.customization.ice === "hot" ? "Uống Nóng" : `${c.customization.ice} đá`}</span>
+                            <span>•</span>
+                            <span>{c.customization.sugar} đường</span>
+                          </div>
+                        )}
+                        {c.customization?.toppings && c.customization.toppings.length > 0 && (
+                          <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                            + {c.customization.toppings.map((tId) => TOPPING_OPTIONS.find((t) => t.id === tId)?.name).join(", ")}
+                          </div>
+                        )}
+                        {c.customization?.note && (
+                          <div className="text-[10px] text-slate-400 italic">
+                            Ghi chú: {c.customization.note}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs font-black text-red-800 shrink-0">
+                        {(c.finalPricePerUnit * c.quantity).toLocaleString("vi-VN")} đ
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQuantity(c.item.id, -1)}
-                        className="grid size-6 place-items-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
-                      >
-                        <Minus size={12} />
-                      </button>
-                      <span className="w-5 text-center text-xs font-black">{c.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(c.item.id, 1)}
-                        className="grid size-6 place-items-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
-                      >
-                        <Plus size={12} />
-                      </button>
+
+                    <div className="flex items-center justify-between border-t border-slate-200/50 pt-2 mt-1">
+                      <div className="text-[10px] text-slate-400">
+                        {c.finalPricePerUnit.toLocaleString("vi-VN")} đ / món
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateQuantity(c.cartId, -1)}
+                          className="grid size-6 place-items-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+                        >
+                          <Minus size={11} />
+                        </button>
+                        <span className="w-4 text-center text-xs font-black">{c.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(c.cartId, 1)}
+                          className="grid size-6 place-items-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -362,34 +640,34 @@ export function CustomerScreen() {
 
             {/* Summary & Checkout CTA */}
             {cart.length > 0 && (
-              <div className="mt-6 border-t border-slate-100 pt-4">
+              <div className="mt-4 border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
                   <span>Tạm tính</span>
-                  <span>{totalAmount.toLocaleString("vi-VN")} đ</span>
+                  <span className="font-bold text-slate-800">{totalAmount.toLocaleString("vi-VN")} đ</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
-                  <span>VAT (8%)</span>
-                  <span>Đã bao gồm</span>
+                  <span>VAT (8%) & Phí dịch vụ</span>
+                  <span className="text-emerald-700 font-bold">Đã bao gồm</span>
                 </div>
                 <div className="flex items-center justify-between text-base font-black text-slate-900 border-t border-slate-100 pt-2 mb-4">
                   <span>Tổng thanh toán</span>
-                  <span className="text-red-700">{totalAmount.toLocaleString("vi-VN")} đ</span>
+                  <span className="text-red-800 font-mono text-lg">{totalAmount.toLocaleString("vi-VN")} đ</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setShowQrModal(true)}
-                    className="flex items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-red-50 py-3 text-xs font-black text-red-700 hover:bg-red-100 transition"
+                    className="flex items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-red-50 py-3 text-xs font-black text-red-800 hover:bg-red-100 transition active:scale-98"
                   >
-                    <QrCode size={16} />
+                    <QrCode size={15} />
                     <span>Quét VietQR</span>
                   </button>
                   <button
                     onClick={handlePlaceOrder}
                     disabled={isSubmitting}
-                    className="flex items-center justify-center gap-1.5 rounded-2xl bg-red-700 py-3 text-xs font-black text-white shadow-md shadow-red-900/20 hover:bg-red-800 transition disabled:opacity-50"
+                    className="flex items-center justify-center gap-1.5 rounded-2xl bg-red-800 py-3 text-xs font-black text-white shadow-md shadow-red-900/20 hover:bg-red-700 transition disabled:opacity-50 active:scale-98"
                   >
-                    <Volume2 size={16} />
+                    <Volume2 size={15} />
                     <span>{isSubmitting ? "Đang gửi..." : "Đặt Đơn Ngay"}</span>
                   </button>
                 </div>
@@ -399,7 +677,195 @@ export function CustomerScreen() {
         </div>
       </div>
 
-      {/* VietQR Modal */}
+      {/* DRINK CUSTOMIZATION MODAL (Highlands & Phúc Long Inspired) */}
+      <AnimatePresence>
+        {customizingItem && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-6 shadow-2xl my-auto text-left"
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between border-b border-slate-100 pb-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-12 place-items-center rounded-2xl bg-red-50 text-2xl">
+                    {customizingItem.image}
+                  </span>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">{customizingItem.name}</h3>
+                    <p className="text-xs text-red-800 font-bold">
+                      Giá gốc: {customizingItem.price.toLocaleString("vi-VN")} đ
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCustomizingItem(null)}
+                  className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1 text-xs">
+                {/* 1. Size Selection */}
+                <div>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">
+                    1. Chọn Kích Cỡ (Size) <span className="text-red-600">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { size: "S", label: "Size S (350ml)", extra: "+0 đ" },
+                      { size: "M", label: "Size M (500ml)", extra: "+6.000 đ" },
+                      { size: "L", label: "Size L (650ml)", extra: "+12.000 đ" },
+                    ].map((s) => (
+                      <button
+                        key={s.size}
+                        type="button"
+                        onClick={() => setCustomState((prev) => ({ ...prev, size: s.size as any }))}
+                        className={`rounded-2xl border p-2.5 text-center transition ${
+                          customState.size === s.size
+                            ? "border-red-600 bg-red-50 text-red-900 ring-2 ring-red-100"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="font-black text-xs">{s.label}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{s.extra}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Ice Level */}
+                <div>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">
+                    2. Mức Đá (Ice Level) <span className="text-red-600">*</span>
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: "100%", label: "100% Đá" },
+                      { id: "70%", label: "70% Ít đá" },
+                      { id: "0%", label: "Không đá" },
+                      { id: "hot", label: "Uống nóng" },
+                    ].map((ice) => (
+                      <button
+                        key={ice.id}
+                        type="button"
+                        onClick={() => setCustomState((prev) => ({ ...prev, ice: ice.id as any }))}
+                        className={`rounded-xl border py-2 text-center text-[11px] font-bold transition ${
+                          customState.ice === ice.id
+                            ? "border-red-600 bg-red-50 text-red-900"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {ice.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Sugar Level */}
+                <div>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">
+                    3. Mức Đường (Sweetness) <span className="text-red-600">*</span>
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: "100%", label: "100% Chuẩn" },
+                      { id: "70%", label: "70% Ít ngọt" },
+                      { id: "50%", label: "50% Nửa ngọt" },
+                      { id: "0%", label: "0% Không ngọt" },
+                    ].map((sugar) => (
+                      <button
+                        key={sugar.id}
+                        type="button"
+                        onClick={() => setCustomState((prev) => ({ ...prev, sugar: sugar.id as any }))}
+                        className={`rounded-xl border py-2 text-center text-[11px] font-bold transition ${
+                          customState.sugar === sugar.id
+                            ? "border-red-600 bg-red-50 text-red-900"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {sugar.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Topping Addons */}
+                <div>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">
+                    4. Thêm Topping Yêu Thích (Tùy chọn)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TOPPING_OPTIONS.map((t) => {
+                      const isSelected = customState.toppings.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setCustomState((prev) => ({
+                              ...prev,
+                              toppings: isSelected
+                                ? prev.toppings.filter((id) => id !== t.id)
+                                : [...prev.toppings, t.id],
+                            }));
+                          }}
+                          className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition ${
+                            isSelected
+                              ? "border-emerald-600 bg-emerald-50/60 text-emerald-950"
+                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="text-[11px] font-bold truncate">{t.name}</span>
+                          <span className="text-[10px] font-mono font-bold text-red-700 shrink-0 ml-1">
+                            +{t.price.toLocaleString("vi-VN")} đ
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 5. Barista Special Note */}
+                <div>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1">
+                    5. Ghi chú cho Barista
+                  </label>
+                  <input
+                    type="text"
+                    value={customState.note}
+                    onChange={(e) => setCustomState((prev) => ({ ...prev, note: e.target.value }))}
+                    placeholder="Ví dụ: Để đá riêng, thêm sữa đặc..."
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer CTA */}
+              <div className="border-t border-slate-100 pt-4 mt-4 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-semibold">Tổng tiền món này:</span>
+                  <span className="text-base font-black text-red-800">
+                    {calculateModalPrice().toLocaleString("vi-VN")} đ
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleConfirmCustomization}
+                  className="rounded-2xl bg-red-800 hover:bg-red-700 text-white px-5 py-2.5 text-xs font-bold shadow-md shadow-red-900/15 transition active:scale-95"
+                >
+                  Thêm Vào Giỏ Hàng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* VIETQR PAYMENT MODAL */}
       <AnimatePresence>
         {showQrModal && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/60 p-4 backdrop-blur-sm">
@@ -420,7 +886,7 @@ export function CustomerScreen() {
                 <img
                   src={qrUrl}
                   alt="VietQR Payment"
-                  className="mx-auto size-56 object-contain rounded-xl shadow-sm"
+                  className="mx-auto size-52 object-contain rounded-xl shadow-sm"
                 />
               </div>
 
@@ -439,14 +905,14 @@ export function CustomerScreen() {
                 </div>
                 <div className="flex justify-between border-t border-slate-200 pt-1.5">
                   <span className="text-slate-500">Số tiền:</span>
-                  <span className="font-black text-red-700">{totalAmount.toLocaleString("vi-VN")} đ</span>
+                  <span className="font-black text-red-800">{totalAmount.toLocaleString("vi-VN")} đ</span>
                 </div>
               </div>
 
               <button
                 onClick={handlePlaceOrder}
                 disabled={isSubmitting}
-                className="w-full rounded-2xl bg-red-700 py-3.5 text-sm font-black text-white shadow-lg shadow-red-900/20 hover:bg-red-800 transition active:scale-98"
+                className="w-full rounded-2xl bg-red-800 py-3.5 text-sm font-black text-white shadow-lg shadow-red-900/20 hover:bg-red-700 transition active:scale-98"
               >
                 {isSubmitting ? "Đang xử lý..." : "Tôi Đã Chuyển Khoản · Xác Nhận"}
               </button>
@@ -455,7 +921,7 @@ export function CustomerScreen() {
         )}
       </AnimatePresence>
 
-      {/* Success Order Modal */}
+      {/* SUCCESS ORDER CONFIRMATION MODAL */}
       <AnimatePresence>
         {successOrderNumber && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/60 p-4 backdrop-blur-sm">
@@ -473,9 +939,25 @@ export function CustomerScreen() {
                 Tín hiệu chuông báo đơn mới đã được gửi tới quầy Barista. Món của bạn đang được ưu tiên chuẩn bị!
               </p>
 
-              <div className="my-5 rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Mã đơn nhận đồ</span>
-                <div className="text-2xl font-black tracking-wider text-red-700">{successOrderNumber}</div>
+              {/* Order Status Stepper */}
+              <div className="my-4 rounded-2xl bg-slate-50 border border-slate-200 p-3.5 text-left space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>1. Đã tiếp nhận đơn hàng</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-700">
+                  <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span>2. Barista đang pha chế</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                  <span className="size-2 rounded-full bg-slate-300" />
+                  <span>3. Sẵn sàng nhận đồ tại quầy</span>
+                </div>
+              </div>
+
+              <div className="my-4 rounded-2xl bg-red-50/70 border border-red-200 p-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Mã đơn nhận đồ</span>
+                <div className="text-2xl font-black tracking-wider text-red-800">{successOrderNumber}</div>
               </div>
 
               <button
