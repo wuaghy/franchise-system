@@ -95,6 +95,7 @@ import {
   type CheckoutOrderPayload,
   type CheckoutResponse,
   type DeductedIngredient,
+  type IngredientItem as ApiIngredientItem,
 } from "./services/api.ts";
 import { ReceiptModal, type ReceiptData } from "./components/ReceiptModal.tsx";
 
@@ -867,17 +868,69 @@ function PageHeading({ eyebrow, title, description, actions }: { eyebrow: string
   );
 }
 
-function StoresScreen({ openModal, dailyRevenue }: { openModal: (modal: Modal) => void; dailyRevenue: number }) {
+function StoresScreen({
+  openModal,
+  dailyRevenue,
+  refreshTrigger,
+}: {
+  openModal: (modal: Modal) => void;
+  dailyRevenue: number;
+  refreshTrigger?: number;
+}) {
   const [query, setQuery] = useState("");
   const [activeOnly, setActiveOnly] = useState(false);
-  const filtered = initialStores.filter(
+  const [storeList, setStoreList] = useState(initialStores);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getStores(1, 50)
+      .then((res) => {
+        if (!isMounted || !res?.items || res.items.length === 0) return;
+        const mapped = res.items.map((s) => ({
+          code: s.code,
+          name: s.name,
+          address: s.address,
+          phone: s.phoneNumber || "+84 28 3822 2211",
+          revenue: "₫18.4m",
+          active: s.isActive,
+        }));
+        setStoreList(mapped);
+      })
+      .catch((err) => console.warn("Could not load backend stores:", err));
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshTrigger]);
+
+  const filtered = storeList.filter(
     (store) => `${store.name} ${store.code} ${store.address}`.toLowerCase().includes(query.toLowerCase()) && (!activeOnly || store.active)
   );
 
   const formattedDailyRevenue = `₫${(dailyRevenue / 1000000).toFixed(1)}m`;
 
+  const handleExportCsv = () => {
+    const headers = ["Mã Chi Nhánh", "Tên Chi Nhánh", "Địa Chỉ", "Số Điện Thoại", "Trạng Thái"];
+    const rows = filtered.map((s) => [
+      `"${s.code}"`,
+      `"${s.name.replace(/"/g, '""')}"`,
+      `"${s.address.replace(/"/g, '""')}"`,
+      `"${s.phone}"`,
+      s.active ? "Đang hoạt động" : "Tạm đóng",
+    ]);
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `danh-sach-chi-nhanh-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const kpis = [
-    { label: "Active stores", value: "24", detail: "across 6 regions", icon: Store, trend: "+2 this quarter", color: "text-red-800 bg-red-50" },
+    { label: "Active stores", value: String(storeList.filter((s) => s.active).length), detail: "across 6 regions", icon: Store, trend: "+2 this quarter", color: "text-red-800 bg-red-50" },
     { label: "Daily revenue", value: formattedDailyRevenue, detail: "vs ₫278.8m yesterday", icon: CircleDollarSign, trend: "+14.2%", color: "text-emerald-700 bg-emerald-50" },
     { label: "Low stock alerts", value: "3", detail: "stores require action", icon: AlertTriangle, trend: "Priority", color: "text-rose-700 bg-rose-50" },
     { label: "Outbox sync rate", value: "99.98%", detail: "last 24 hours", icon: Wifi, trend: "Healthy", color: "text-blue-700 bg-blue-50" },
@@ -891,7 +944,7 @@ function StoresScreen({ openModal, dailyRevenue }: { openModal: (modal: Modal) =
         description="Monitor performance and manage every franchise location from one live control plane."
         actions={
           <>
-            <Button>
+            <Button onClick={handleExportCsv} title="Xuất danh sách chi nhánh ra file CSV">
               <Download size={16} /> Export
             </Button>
             <Button variant="primary" onClick={() => openModal("store")}>
@@ -1030,10 +1083,14 @@ function InventoryScreen({
   openModal,
   inventory,
   activeAlert,
+  onSync,
+  isSyncing,
 }: {
   openModal: (modal: Modal) => void;
   inventory: InventoryRecord[];
   activeAlert: LowStockAlertNotification | null;
+  onSync?: () => void;
+  isSyncing?: boolean;
 }) {
   return (
     <motion.main initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="mx-auto max-w-[1600px] px-4 py-6 lg:px-6 lg:py-8">
@@ -1043,8 +1100,9 @@ function InventoryScreen({
         description="Real-time stock ledger with recipe-level consumption and threshold alerts."
         actions={
           <>
-            <Button>
-              <RefreshCcw size={16} /> Sync now
+            <Button onClick={onSync} disabled={isSyncing} title="Đồng bộ sổ cái tồn kho thời gian thực từ máy chủ">
+              <RefreshCcw size={16} className={isSyncing ? "animate-spin" : ""} />
+              {isSyncing ? "Đang đồng bộ..." : "Sync now"}
             </Button>
             <Button variant="primary" onClick={() => openModal("restock")}>
               <PackagePlus size={17} /> Inbound restock
@@ -1782,7 +1840,40 @@ function PosScreen({
   onCheckoutSuccess: (receipt: ReceiptData) => void;
 }) {
   const [category, setCategory] = useState("All");
-  const [productList] = useState<PosProduct[]>(defaultPosProducts);
+  const [productList, setProductList] = useState<PosProduct[]>(defaultPosProducts);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getProducts()
+      .then((items) => {
+        if (!isMounted || !items || items.length === 0) return;
+        const mapped: PosProduct[] = items.map((p) => {
+          const matched = defaultPosProducts.find(
+            (dp) => dp.sku.toLowerCase() === p.sku.toLowerCase() || dp.name.toLowerCase() === p.name.toLowerCase()
+          );
+          return {
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            category: p.categoryName || matched?.category || "Coffee",
+            price: p.basePrice,
+            image:
+              matched?.image ||
+              "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=700&q=85",
+          };
+        });
+        setProductList(mapped);
+      })
+      .catch((err) => console.warn("Could not load backend products for POS:", err));
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const categories = useMemo(() => {
+    const list = Array.from(new Set(productList.map((p) => p.category)));
+    return ["All", ...list];
+  }, [productList]);
   const [cart, setCart] = useState<CartItem[]>([
     {
       id: "init-1",
@@ -2082,7 +2173,9 @@ function PosScreen({
         <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-red-700">Counter 03 · Shift A</p>
-            <h1 className="text-2xl font-black tracking-tight text-slate-950">Good morning, Linh</h1>
+            <h1 className="text-2xl font-black tracking-tight text-slate-950">
+              Good morning, {currentUser?.fullName || currentUser?.username || "Linh"}
+            </h1>
             <p className="text-xs text-slate-500">Tap a menu item to start building the order.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2130,7 +2223,7 @@ function PosScreen({
           </div>
         )}
         <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          {["All", "Coffee", "Tea", "Freeze", "Bakery"].map((item) => (
+          {categories.map((item) => (
             <button
               key={item}
               onClick={() => setCategory(item)}
@@ -2358,13 +2451,37 @@ function ModalShell({ onClose, children, side = false }: { onClose: () => void; 
   );
 }
 
-function Field({ label, placeholder, error }: { label: string; placeholder: string; error?: string }) {
+function Field({
+  label,
+  placeholder,
+  error,
+  value,
+  onChange,
+  required,
+  type = "text",
+  disabled = false,
+}: {
+  label: string;
+  placeholder?: string;
+  error?: string;
+  value?: string | number;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  required?: boolean;
+  type?: string;
+  disabled?: boolean;
+}) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-bold text-slate-700">{label}</span>
+      <span className="mb-1.5 block text-xs font-bold text-slate-700">
+        {label} {required && <span className="text-rose-500">*</span>}
+      </span>
       <input
+        type={type}
+        disabled={disabled}
+        value={value}
+        onChange={onChange}
         placeholder={placeholder}
-        className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none transition focus:ring-4 ${
+        className={`h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none transition focus:ring-4 disabled:bg-slate-50 disabled:text-slate-500 ${
           error ? "border-rose-300 focus:border-rose-400 focus:ring-rose-50" : "border-slate-200 focus:border-red-300 focus:ring-red-50"
         }`}
       />
@@ -2716,16 +2833,264 @@ function LoginModal({
   );
 }
 
+function StoreModal({
+  onClose,
+  onStoreCreated,
+}: {
+  onClose: () => void;
+  onStoreCreated?: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code.trim() || !name.trim()) {
+      setError("Mã chi nhánh và Tên chi nhánh là bắt buộc.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await api.createStore({
+        code: code.trim().toUpperCase(),
+        name: name.trim(),
+        address: address.trim() || "Việt Nam",
+        phoneNumber: phoneNumber.trim() || "028 3822 1234",
+      });
+      onStoreCreated?.();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Không thể tạo chi nhánh mới.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalShell side onClose={onClose}>
+      <form onSubmit={handleSubmit} className="flex h-full flex-col">
+        <div className="flex items-center justify-between border-b border-slate-200 p-6">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-red-700">Network expansion</p>
+            <h2 className="text-xl font-black text-slate-950">Create franchise store</h2>
+          </div>
+          <Button variant="ghost" type="button" onClick={onClose} className="!size-10 !p-0">
+            <X size={19} />
+          </Button>
+        </div>
+        <div className="flex-1 space-y-5 p-6 overflow-y-auto">
+          {error && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-700">
+              {error}
+            </div>
+          )}
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-relaxed text-blue-800">
+            <b>Mã chi nhánh là duy nhất.</b> Hệ thống sẽ tự động gán tài khoản nhượng quyền và kích hoạt trên hệ thống đám mây.
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Store code"
+              placeholder="e.g. HL-25"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+            <Field
+              label="Phone number"
+              placeholder="+84 28 ..."
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+            />
+          </div>
+          <Field
+            label="Store name"
+            placeholder="Highlands Nguyễn Huệ"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <Field
+            label="Street address"
+            placeholder="Địa chỉ kinh doanh đầy đủ"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+        </div>
+        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white p-5">
+          <Button type="button" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" type="submit" disabled={isSubmitting}>
+            <Check size={16} /> {isSubmitting ? "Creating..." : "Create store"}
+          </Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function RestockModal({
+  onClose,
+  storeId,
+  onRestocked,
+}: {
+  onClose: () => void;
+  storeId: string;
+  onRestocked?: () => void;
+}) {
+  const [ingredients, setIngredients] = useState<ApiIngredientItem[]>([]);
+  const [selectedIngredientId, setSelectedIngredientId] = useState("");
+  const [quantity, setQuantity] = useState("500");
+  const [notes, setNotes] = useState("TRF-2026-HQ");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getIngredients()
+      .then((items) => {
+        if (!isMounted || !items || items.length === 0) return;
+        setIngredients(items);
+        setSelectedIngredientId(items[0].id);
+      })
+      .catch((err) => console.warn("Could not load ingredients for restock:", err));
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const selectedIng = ingredients.find((i) => i.id === selectedIngredientId);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedIngredientId || !quantity || Number(quantity) <= 0) {
+      setError("Vui lòng chọn nguyên liệu và nhập số lượng nhập kho hợp lệ.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await api.inboundStock({
+        storeId,
+        ingredientId: selectedIngredientId,
+        quantity: Number(quantity),
+        note: notes,
+      });
+      onRestocked?.();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Nhập kho thất bại. Vui lòng kiểm tra lại kết nối.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalShell onClose={onClose}>
+      <form onSubmit={handleSubmit}>
+        <div className="flex items-start justify-between p-6 pb-3">
+          <div>
+            <span className="mb-3 grid size-11 place-items-center rounded-xl bg-red-50 text-red-800">
+              <PackagePlus size={21} />
+            </span>
+            <h2 className="text-xl font-black text-slate-950">Inbound from HQ</h2>
+            <p className="mt-1 text-sm text-slate-500">Create a verified stock ledger entry.</p>
+          </div>
+          <Button variant="ghost" type="button" onClick={onClose} className="!size-10 !p-0">
+            <X size={18} />
+          </Button>
+        </div>
+        <div className="space-y-4 px-6 pb-6">
+          {error && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-700">
+              {error}
+            </div>
+          )}
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-bold text-slate-700">Ingredient / SKU</span>
+            <select
+              value={selectedIngredientId}
+              onChange={(e) => setSelectedIngredientId(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
+            >
+              {ingredients.length === 0 ? (
+                <option value="">Đang tải danh mục nguyên liệu...</option>
+              ) : (
+                ingredients.map((ing) => (
+                  <option key={ing.id} value={ing.id}>
+                    {ing.code} · {ing.name} ({ing.unit})
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold text-slate-700">Quantity</span>
+              <input
+                type="number"
+                min="1"
+                step="any"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="500"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold text-slate-700">Unit</span>
+              <input
+                type="text"
+                disabled
+                value={selectedIng?.unit || "gram"}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-mono text-slate-500 outline-none"
+              />
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-bold text-slate-700">HQ transfer reference</span>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="TRF-2026-10842"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-50"
+            />
+          </label>
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+            <input type="checkbox" defaultChecked className="mt-0.5 accent-red-800" />
+            <span className="text-xs text-slate-600">
+              <b className="block text-slate-800">Update available-to-sell now</b>Cập nhật ngay vào sổ cái tồn kho và giải phóng cảnh báo thiếu hụt.
+            </span>
+          </label>
+          <Button variant="primary" type="submit" disabled={isSubmitting} className="w-full">
+            <PackageCheck size={17} /> {isSubmitting ? "Đang ghi nhận..." : "Confirm inbound stock"}
+          </Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
 function ModalContent({
   modal,
   close,
   onLoginSuccess,
   receiptData,
+  storeId,
+  onRestocked,
+  onStoreCreated,
 }: {
   modal: Exclude<Modal, null>;
   close: () => void;
   onLoginSuccess: (user: User) => void;
   receiptData: ReceiptData | null;
+  storeId: string;
+  onRestocked?: () => void;
+  onStoreCreated?: () => void;
 }) {
   if (modal === "login") {
     return <LoginModal onClose={close} onSuccess={onLoginSuccess} />;
@@ -2764,76 +3129,12 @@ function ModalContent({
       />
     );
   }
-  if (modal === "store")
-    return (
-      <ModalShell side onClose={close}>
-        <div className="flex items-center justify-between border-b border-slate-200 p-6">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-widest text-red-700">Network expansion</p>
-            <h2 className="text-xl font-black text-slate-950">Create franchise store</h2>
-          </div>
-          <Button variant="ghost" onClick={close} className="!size-10 !p-0">
-            <X size={19} />
-          </Button>
-        </div>
-        <div className="space-y-5 p-6">
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-relaxed text-blue-800">
-            <b>Store IDs are permanent.</b> Review region and franchise ownership before creation.
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Store code" placeholder="e.g. HL-25" error="Code must match REGION-##" />
-            <Field label="Region" placeholder="Ho Chi Minh City" />
-          </div>
-          <Field label="Store name" placeholder="Highlands Nguyễn Huệ" />
-          <Field label="Street address" placeholder="Full operating address" />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Phone number" placeholder="+84 ..." />
-            <Field label="Franchise owner" placeholder="Legal entity" />
-          </div>
-          <Field label="Opening date" placeholder="DD / MM / YYYY" />
-        </div>
-        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white p-5">
-          <Button onClick={close}>Cancel</Button>
-          <Button variant="primary">
-            <Check size={16} /> Create store
-          </Button>
-        </div>
-      </ModalShell>
-    );
-  if (modal === "restock")
-    return (
-      <ModalShell onClose={close}>
-        <div className="flex items-start justify-between p-6 pb-3">
-          <div>
-            <span className="mb-3 grid size-11 place-items-center rounded-xl bg-red-50 text-red-800">
-              <PackagePlus size={21} />
-            </span>
-            <h2 className="text-xl font-black text-slate-950">Inbound from HQ</h2>
-            <p className="mt-1 text-sm text-slate-500">Create a verified stock ledger entry.</p>
-          </div>
-          <Button variant="ghost" onClick={close} className="!size-10 !p-0">
-            <X size={18} />
-          </Button>
-        </div>
-        <div className="space-y-4 px-6 pb-6">
-          <Field label="Ingredient / SKU" placeholder="PEARL-01 · Black Tapioca Pearl" />
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Quantity" placeholder="500" />
-            <Field label="Unit" placeholder="gram" />
-          </div>
-          <Field label="HQ transfer reference" placeholder="TRF-2026-10842" />
-          <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
-            <input type="checkbox" defaultChecked className="mt-0.5 accent-red-800" />
-            <span className="text-xs text-slate-600">
-              <b className="block text-slate-800">Update available-to-sell now</b>Creates an auditable inventory event and resolves the alert.
-            </span>
-          </label>
-          <Button variant="primary" className="w-full" onClick={close}>
-            <PackageCheck size={17} /> Confirm inbound stock
-          </Button>
-        </div>
-      </ModalShell>
-    );
+  if (modal === "store") {
+    return <StoreModal onClose={close} onStoreCreated={onStoreCreated} />;
+  }
+  if (modal === "restock") {
+    return <RestockModal onClose={close} storeId={storeId} onRestocked={onRestocked} />;
+  }
   if (modal === "modifier")
     return (
       <ModalShell onClose={close}>
@@ -2900,6 +3201,61 @@ export default function App() {
   const [activeAlert, setActiveAlert] = useState<LowStockAlertNotification | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [storesRefreshTrigger, setStoresRefreshTrigger] = useState(0);
+  const [isSyncingInventory, setIsSyncingInventory] = useState(false);
+
+  const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";
+
+  const fetchStoreInventory = async (storeId = effectiveStoreId) => {
+    setIsSyncingInventory(true);
+    try {
+      const [invItems, lowAlerts] = await Promise.all([
+        api.getStoreInventory(storeId).catch(() => []),
+        api.getLowStockAlerts(storeId).catch(() => []),
+      ]);
+
+      if (invItems && invItems.length > 0) {
+        setInventory(
+          invItems.map((item) => ({
+            code: item.ingredientCode,
+            name: item.ingredientName,
+            unit: item.unit,
+            current: item.currentStock,
+            min: item.minAlertThreshold,
+            counted: item.lastCountedAt
+              ? new Date(item.lastCountedAt).toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Vừa xong",
+          }))
+        );
+      }
+
+      if (lowAlerts && lowAlerts.length > 0) {
+        const first = lowAlerts[0];
+        setActiveAlert({
+          storeId: first.storeId,
+          ingredientId: first.ingredientId,
+          ingredientCode: first.ingredientCode,
+          ingredientName: first.ingredientName,
+          unit: first.unit,
+          currentStock: first.currentStock,
+          minAlertThreshold: first.minAlertThreshold,
+          shortage: first.shortage,
+          triggeredAt: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.warn("Could not sync store inventory:", err);
+    } finally {
+      setIsSyncingInventory(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStoreInventory(effectiveStoreId);
+  }, [effectiveStoreId]);
 
   // Announcement & Notification State
   const [notifications, setNotifications] = useState<SystemNotification[]>([
@@ -3087,8 +3443,22 @@ export default function App() {
           />
         )}
         {screen === "customer" && <CustomerScreen />}
-        {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
-        {screen === "inventory" && <InventoryScreen openModal={setModal} inventory={inventory} activeAlert={activeAlert} />}
+        {screen === "stores" && (
+          <StoresScreen
+            openModal={setModal}
+            dailyRevenue={dailyRevenue}
+            refreshTrigger={storesRefreshTrigger}
+          />
+        )}
+        {screen === "inventory" && (
+          <InventoryScreen
+            openModal={setModal}
+            inventory={inventory}
+            activeAlert={activeAlert}
+            onSync={() => fetchStoreInventory(effectiveStoreId)}
+            isSyncing={isSyncingInventory}
+          />
+        )}
         {screen === "transfers" && <TransfersHubScreen currentUser={currentUser} />}
         {screen === "bom-studio" && <BomStudioScreen />}
         {screen === "pos" && (
@@ -3098,6 +3468,7 @@ export default function App() {
             onCheckoutSuccess={(rec) => {
               setReceiptData(rec);
               setModal("receipt");
+              fetchStoreInventory(effectiveStoreId);
             }}
           />
         )}
@@ -3110,6 +3481,9 @@ export default function App() {
             modal={modal}
             close={() => setModal(null)}
             receiptData={receiptData}
+            storeId={effectiveStoreId}
+            onRestocked={() => fetchStoreInventory(effectiveStoreId)}
+            onStoreCreated={() => setStoresRefreshTrigger((v) => v + 1)}
             onLoginSuccess={(u) => {
               setCurrentUser(u);
               realtimeHub.start();
