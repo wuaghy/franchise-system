@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Franchise.Api.Controllers;
 
-[Authorize]
+[Authorize(Policy = "RequireStoreAccess")]
 [ApiController]
 [Route("api/stores/{storeId:guid}/kds")]
 [Produces("application/json")]

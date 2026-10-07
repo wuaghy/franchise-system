@@ -48,7 +48,7 @@ public class WarehousesController : ControllerBase
     /// Nhập hàng từ Nhà Cung Cấp vào Kho Tổng (Supplier Inbound)
     /// </summary>
     [HttpPost("{id:guid}/inbound")]
-    [Authorize(Roles = "SuperAdmin,HQ_Admin,Supply_Chain")]
+    [Authorize(Roles = "HQ_SuperAdmin,Supply_Chain_Officer")]
     [ProducesResponseType(typeof(List<WarehouseInventoryDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> InboundWarehouseStock(Guid id, [FromBody] WarehouseInboundRequest request, CancellationToken ct)

@@ -28,9 +28,9 @@ public class StoreAccessAuthorizationHandler : AuthorizationHandler<StoreAccessR
             return Task.CompletedTask;
         }
 
-        // HQ SuperAdmin có toàn quyền trên mọi chi nhánh
+        // HQ SuperAdmin và Supply Chain Officer có quyền truy cập thông tin chi nhánh
         var role = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
-        if (role is "HQ_SuperAdmin")
+        if (role is "HQ_SuperAdmin" or "Supply_Chain_Officer")
         {
             context.Succeed(requirement);
             return Task.CompletedTask;
@@ -42,8 +42,13 @@ public class StoreAccessAuthorizationHandler : AuthorizationHandler<StoreAccessR
             return Task.CompletedTask;
         }
 
-        // Lấy storeId từ Route Value (ví dụ: /api/stores/{storeId}/...)
+        // Lấy storeId từ Route Value (ví dụ: /api/stores/{storeId}/...) hoặc Query param (?storeId=...)
         var routeStoreIdStr = httpContext.GetRouteValue("storeId")?.ToString();
+        if (string.IsNullOrEmpty(routeStoreIdStr) && httpContext.Request.Query.ContainsKey("storeId"))
+        {
+            routeStoreIdStr = httpContext.Request.Query["storeId"].ToString();
+        }
+
         var userStoreId = user.FindFirst("store_id")?.Value;
 
         if (!string.IsNullOrEmpty(routeStoreIdStr) && !string.IsNullOrEmpty(userStoreId))

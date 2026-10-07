@@ -30,6 +30,7 @@ public class OrdersController : ControllerBase
     /// <param name="idempotencyKey">Khóa chống lặp giao dịch</param>
     /// <param name="ct">CancellationToken</param>
     /// <returns>Thông tin đơn hàng đã tạo, chi tiết khấu trừ nguyên liệu và trạng thái thanh toán</returns>
+    [AllowAnonymous]
     [HttpPost("checkout")]
     [ProducesResponseType(typeof(CheckoutOrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

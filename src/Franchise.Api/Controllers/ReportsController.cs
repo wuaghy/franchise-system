@@ -26,6 +26,7 @@ public class ReportsController : ControllerBase
     /// Lấy báo cáo tổng hợp tài chính của chi nhánh (Doanh thu, VAT, Chiết khấu, COGS và Biên lợi nhuận gộp).
     /// </summary>
     [HttpGet("stores/{storeId:guid}/summary")]
+    [Authorize(Policy = "RequireStoreAccess")]
     [ProducesResponseType(typeof(FinancialSummaryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetStoreSummary(
@@ -42,6 +43,7 @@ public class ReportsController : ControllerBase
     /// Biểu đồ nhiệt doanh thu theo 24 giờ (Hourly Sales Heatmap) giúp nhận diện khung giờ cao điểm (Peak Hours).
     /// </summary>
     [HttpGet("stores/{storeId:guid}/hourly-heatmap")]
+    [Authorize(Policy = "RequireStoreAccess")]
     [ProducesResponseType(typeof(HourlySalesHeatmapDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetHourlyHeatmap(
@@ -57,6 +59,7 @@ public class ReportsController : ControllerBase
     /// Xếp hạng hiệu suất bán hàng của từng món (Pareto Menu Performance), đóng góp doanh thu và lợi nhuận.
     /// </summary>
     [HttpGet("stores/{storeId:guid}/products")]
+    [Authorize(Policy = "RequireStoreAccess")]
     [ProducesResponseType(typeof(List<ProductSalesRankDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProductPerformance(
@@ -74,6 +77,7 @@ public class ReportsController : ControllerBase
     /// Báo cáo tổng quan toàn mạng lưới chuỗi nhượng quyền dành cho HQ SuperAdmin (So sánh doanh số các chi nhánh).
     /// </summary>
     [HttpGet("network/overview")]
+    [Authorize(Roles = "HQ_SuperAdmin,Franchise_Owner")]
     [ProducesResponseType(typeof(NetworkOverviewDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNetworkOverview(
         [FromQuery] DateTime? fromDate,

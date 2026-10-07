@@ -12,10 +12,14 @@ namespace Franchise.Api.Controllers;
 public class RoyaltyController : ControllerBase
 {
     private readonly IRoyaltyBillingService _royaltyService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public RoyaltyController(IRoyaltyBillingService royaltyService)
+    public RoyaltyController(
+        IRoyaltyBillingService royaltyService,
+        ICurrentUserService currentUserService)
     {
         _royaltyService = royaltyService;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -29,6 +33,12 @@ public class RoyaltyController : ControllerBase
         [FromQuery] int? month,
         CancellationToken ct)
     {
+        // Nhân viên/quản lý chi nhánh chỉ xem hóa đơn của chi nhánh mình
+        if (!_currentUserService.IsSuperAdmin && _currentUserService.StoreId.HasValue)
+        {
+            storeId = _currentUserService.StoreId.Value;
+        }
+
         var result = await _royaltyService.GetInvoicesAsync(storeId, year, month, ct);
         return Ok(result);
     }
@@ -51,6 +61,7 @@ public class RoyaltyController : ControllerBase
     /// Tạo mới/tính toán hóa đơn phí nhượng quyền cho một chi nhánh trong kỳ chỉ định (Status: Draft).
     /// </summary>
     [HttpPost("invoices/generate")]
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [ProducesResponseType(typeof(RoyaltyInvoiceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -66,6 +77,7 @@ public class RoyaltyController : ControllerBase
     /// Tự động sinh hàng loạt hóa đơn phí nhượng quyền cho toàn bộ mạng lưới chi nhánh trong tháng.
     /// </summary>
     [HttpPost("invoices/generate-network")]
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [ProducesResponseType(typeof(List<RoyaltyInvoiceDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GenerateNetworkInvoices(
         [FromQuery] int year,
@@ -80,6 +92,7 @@ public class RoyaltyController : ControllerBase
     /// Phát hành hóa đơn gửi tới chủ nhượng quyền chi nhánh (Draft -> Issued).
     /// </summary>
     [HttpPost("invoices/{invoiceId:guid}/issue")]
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [ProducesResponseType(typeof(RoyaltyInvoiceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -95,6 +108,7 @@ public class RoyaltyController : ControllerBase
     /// Xác nhận chi nhánh đã nộp phí nhượng quyền thành công (Issued -> Paid).
     /// </summary>
     [HttpPost("invoices/{invoiceId:guid}/pay")]
+    [Authorize(Roles = "HQ_SuperAdmin,Franchise_Owner,Store_Manager")]
     [ProducesResponseType(typeof(RoyaltyInvoiceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -111,6 +125,7 @@ public class RoyaltyController : ControllerBase
     /// Hủy hóa đơn phí nhượng quyền kèm lý do.
     /// </summary>
     [HttpPost("invoices/{invoiceId:guid}/cancel")]
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [ProducesResponseType(typeof(RoyaltyInvoiceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -127,6 +142,7 @@ public class RoyaltyController : ControllerBase
     /// Lấy cấu hình tỷ lệ phí nhượng quyền của chi nhánh.
     /// </summary>
     [HttpGet("settings/{storeId:guid}")]
+    [Authorize(Policy = "RequireStoreAccess")]
     [ProducesResponseType(typeof(StoreRoyaltySettingDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetStoreSetting(
@@ -141,6 +157,7 @@ public class RoyaltyController : ControllerBase
     /// Cập nhật cấu hình tỷ lệ phí nhượng quyền cho chi nhánh.
     /// </summary>
     [HttpPut("settings/{storeId:guid}")]
+    [Authorize(Roles = "HQ_SuperAdmin")]
     [ProducesResponseType(typeof(StoreRoyaltySettingDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateStoreSetting(
