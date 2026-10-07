@@ -98,6 +98,7 @@ import {
   type IngredientItem as ApiIngredientItem,
 } from "./services/api.ts";
 import { ReceiptModal, type ReceiptData } from "./components/ReceiptModal.tsx";
+import { VietQrModal } from "./components/VietQrModal.tsx";
 
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
@@ -1900,6 +1901,7 @@ function PosScreen({
   const [offlineCount, setOfflineCount] = useState<number>(() => getPendingOfflineOrderCount());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [ticketSeq, setTicketSeq] = useState(() => Math.floor(100 + Math.random() * 900));
+  const [showVietQrModal, setShowVietQrModal] = useState<boolean>(false);
 
   const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";
   const effectiveStoreName =
@@ -1981,72 +1983,73 @@ function PosScreen({
     }
   };
 
-  const handlePay = async () => {
-    if (!cart.length) return;
-
+  const executeOfflineCheckout = () => {
     const mappedOrderType = orderType === "Dine-in" ? 0 : 1;
     const mappedPaymentMethod = payment === "Cash" ? 0 : payment === "Credit Card" ? 1 : 2;
 
-    if (!isOnline) {
-      const offlineOrderId = `OFF-${Date.now()}`;
-      const idempotencyKey = `POS-OFF-${offlineOrderId}`;
-      const offlineOrder: OfflineOrderSyncItem = {
-        offlineOrderId,
-        idempotencyKey,
-        storeId: effectiveStoreId,
-        paymentMethod: mappedPaymentMethod,
-        orderType: mappedOrderType,
-        subtotal,
-        discountAmount: 0,
-        vatAmount: vat,
-        finalAmount: total,
-        offlineCreatedAt: new Date().toISOString(),
-        items: cart.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.price,
-          specialNote: item.size ? `Size ${item.size}` : undefined,
-          modifiers: item.toppings.map((t) => ({
-            name: t,
-            extraPrice: 10000,
-            consumptionQuantity: 25,
-          })),
+    const offlineOrderId = `OFF-${Date.now()}`;
+    const idempotencyKey = `POS-OFF-${offlineOrderId}`;
+    const offlineOrder: OfflineOrderSyncItem = {
+      offlineOrderId,
+      idempotencyKey,
+      storeId: effectiveStoreId,
+      paymentMethod: mappedPaymentMethod,
+      orderType: mappedOrderType,
+      subtotal,
+      discountAmount: 0,
+      vatAmount: vat,
+      finalAmount: total,
+      offlineCreatedAt: new Date().toISOString(),
+      items: cart.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        specialNote: item.size ? `Size ${item.size}` : undefined,
+        modifiers: item.toppings.map((t) => ({
+          name: t,
+          extraPrice: 10000,
+          consumptionQuantity: 25,
         })),
-      };
+      })),
+    };
 
-      enqueueOfflineOrder(offlineOrder);
-      setOfflineCount(getPendingOfflineOrderCount());
+    enqueueOfflineOrder(offlineOrder);
+    setOfflineCount(getPendingOfflineOrderCount());
 
-      const offlineReceipt: ReceiptData = {
-        orderId: offlineOrderId,
-        orderNumber: offlineOrderId,
-        subtotal,
-        vatAmount: vat,
-        finalAmount: total,
-        createdAt: new Date().toISOString(),
-        paymentMethod: payment,
-        orderType: orderType,
-        storeName: effectiveStoreName,
-        storeAddress: "12 Lê Lợi, P. Bến Nghé, Quận 1, TP. HCM",
-        storePhone: "028 3822 1234",
-        cashierName: cashierDisplayName,
-        counterName: "Counter 03 · Shift A",
-        items: cart.map((i) => ({
-          name: i.name,
-          quantity: i.quantity,
-          price: i.price,
-          size: i.size,
-          toppings: i.toppings,
-        })),
-        isOffline: true,
-      };
+    const offlineReceipt: ReceiptData = {
+      orderId: offlineOrderId,
+      orderNumber: offlineOrderId,
+      subtotal,
+      vatAmount: vat,
+      finalAmount: total,
+      createdAt: new Date().toISOString(),
+      paymentMethod: payment,
+      orderType: orderType,
+      storeName: effectiveStoreName,
+      storeAddress: "12 Lê Lợi, P. Bến Nghé, Quận 1, TP. HCM",
+      storePhone: "028 3822 1234",
+      cashierName: cashierDisplayName,
+      counterName: "Counter 03 · Shift A",
+      items: cart.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        price: i.price,
+        size: i.size,
+        toppings: i.toppings,
+      })),
+      isOffline: true,
+    };
 
-      audioNotifier.playOrderChime("standard");
-      setCart([]);
-      setTicketSeq((seq) => seq + 1);
-      onCheckoutSuccess(offlineReceipt);
-      return;
-    }
+    audioNotifier.playOrderChime("standard");
+    setCart([]);
+    setTicketSeq((seq) => seq + 1);
+    setShowVietQrModal(false);
+    onCheckoutSuccess(offlineReceipt);
+  };
+
+  const executeOnlineCheckout = async () => {
+    const mappedOrderType = orderType === "Dine-in" ? 0 : 1;
+    const mappedPaymentMethod = payment === "Cash" ? 0 : payment === "Credit Card" ? 1 : 2;
 
     try {
       setIsSyncing(true);
@@ -2103,68 +2106,30 @@ function PosScreen({
 
       setCart([]);
       setTicketSeq((seq) => seq + 1);
+      setShowVietQrModal(false);
       onCheckoutSuccess(receipt);
     } catch (err: any) {
       console.warn("API checkout failed, falling back to offline queue:", err);
-      const offlineOrderId = `OFF-${Date.now()}`;
-      const idempotencyKey = `POS-OFF-${offlineOrderId}`;
-      const offlineOrder: OfflineOrderSyncItem = {
-        offlineOrderId,
-        idempotencyKey,
-        storeId: effectiveStoreId,
-        paymentMethod: mappedPaymentMethod,
-        orderType: mappedOrderType,
-        subtotal,
-        discountAmount: 0,
-        vatAmount: vat,
-        finalAmount: total,
-        offlineCreatedAt: new Date().toISOString(),
-        items: cart.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.price,
-          specialNote: item.size,
-          modifiers: item.toppings.map((t) => ({
-            name: t,
-            extraPrice: 10000,
-            consumptionQuantity: 25,
-          })),
-        })),
-      };
-
-      enqueueOfflineOrder(offlineOrder);
-      setOfflineCount(getPendingOfflineOrderCount());
-
-      const offlineReceipt: ReceiptData = {
-        orderId: offlineOrderId,
-        orderNumber: offlineOrderId,
-        subtotal,
-        vatAmount: vat,
-        finalAmount: total,
-        createdAt: new Date().toISOString(),
-        paymentMethod: payment,
-        orderType: orderType,
-        storeName: effectiveStoreName,
-        storeAddress: "12 Lê Lợi, P. Bến Nghé, Quận 1, TP. HCM",
-        storePhone: "028 3822 1234",
-        cashierName: cashierDisplayName,
-        counterName: "Counter 03 · Shift A",
-        items: cart.map((i) => ({
-          name: i.name,
-          quantity: i.quantity,
-          price: i.price,
-          size: i.size,
-          toppings: i.toppings,
-        })),
-        isOffline: true,
-      };
-
-      setCart([]);
-      setTicketSeq((seq) => seq + 1);
-      onCheckoutSuccess(offlineReceipt);
+      executeOfflineCheckout();
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handlePay = async () => {
+    if (!cart.length) return;
+
+    if (!isOnline) {
+      executeOfflineCheckout();
+      return;
+    }
+
+    if (payment === "QR Transfer") {
+      setShowVietQrModal(true);
+      return;
+    }
+
+    await executeOnlineCheckout();
   };
 
   return (
@@ -2422,14 +2387,34 @@ function PosScreen({
                   <span className="font-mono font-black text-emerald-700">{total.toLocaleString("vi-VN")} đ</span>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowVietQrModal(true)}
+                className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 px-3 text-xs font-bold text-white shadow-md shadow-red-900/15 hover:from-red-700 hover:to-red-600 transition active:scale-98"
+              >
+                <QrCode size={16} /> Mở Kiosk Quét Mã (Toàn màn hình)
+              </button>
             </motion.div>
           )}
 
           <Button variant="primary" disabled={!cart.length} onClick={handlePay} className="w-full !min-h-13 text-xs tracking-wide">
-            <ShieldCheck size={18} /> {isOnline ? "Pay & deduct inventory" : "Lưu đơn ngoại tuyến (Offline)"} <span className="ml-auto rounded-md bg-white/15 px-1.5 py-0.5 font-mono">F9</span>
+            <ShieldCheck size={18} /> {isOnline ? (payment === "QR Transfer" ? "Mở Kiosk Quét VietQR Napas" : "Pay & deduct inventory") : "Lưu đơn ngoại tuyến (Offline)"} <span className="ml-auto rounded-md bg-white/15 px-1.5 py-0.5 font-mono">F9</span>
           </Button>
         </div>
       </Panel>
+
+      {showVietQrModal && (
+        <VietQrModal
+          orderCode={currentOrderCode}
+          amount={total}
+          storeName={effectiveStoreName}
+          isProcessing={isSyncing}
+          onClose={() => setShowVietQrModal(false)}
+          onSuccess={async () => {
+            await executeOnlineCheckout();
+          }}
+        />
+      )}
     </motion.main>
   );
 }
