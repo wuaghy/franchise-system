@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag,
@@ -300,8 +300,39 @@ export function CustomerScreen() {
     note: "",
   });
 
+  const [menuData, setMenuData] = useState<MenuItem[]>(MENU_DATA);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getProducts()
+      .then((products) => {
+        if (!isMounted || !products || products.length === 0) return;
+        setMenuData((prev) =>
+          prev.map((item) => {
+            const match = products.find(
+              (p) =>
+                p.sku.toLowerCase() === item.id.toLowerCase() ||
+                p.name.toLowerCase() === item.name.toLowerCase()
+            );
+            if (match) {
+              return {
+                ...item,
+                price: match.basePrice,
+                name: match.name,
+              };
+            }
+            return item;
+          })
+        );
+      })
+      .catch((err) => console.warn("Could not sync backend products in CustomerScreen:", err));
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const filteredMenu =
-    selectedCategory === "all" ? MENU_DATA : MENU_DATA.filter((i) => i.category === selectedCategory);
+    selectedCategory === "all" ? menuData : menuData.filter((i) => i.category === selectedCategory);
 
   const totalAmount = cart.reduce((sum, c) => sum + c.finalPricePerUnit * c.quantity, 0);
 
