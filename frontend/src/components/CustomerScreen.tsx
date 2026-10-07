@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag,
@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Clock,
   MapPin,
+  Store,
   UtensilsCrossed,
   Volume2,
   X,
@@ -280,7 +281,20 @@ export interface CartItem {
   finalPricePerUnit: number;
 }
 
+export interface CustomerStoreOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
+const defaultCustomerStores: CustomerStoreOption[] = [
+  { id: "22222222-2222-2222-2222-222222222222", name: "Chi nhánh Quận 1 (Flagship)", code: "STORE-Q1" },
+  { id: "33333333-3333-3333-3333-333333333333", name: "Chi nhánh Landmark 81", code: "STORE-L81" },
+];
+
 export function CustomerScreen() {
+  const [storeOptions, setStoreOptions] = useState<CustomerStoreOption[]>(defaultCustomerStores);
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(defaultCustomerStores[0].id);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "coffee" | "milktea" | "fruit_tea" | "freeze" | "bakery">("all");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<"dine-in" | "take-away">("dine-in");
@@ -301,6 +315,31 @@ export function CustomerScreen() {
   });
 
   const [menuData, setMenuData] = useState<MenuItem[]>(MENU_DATA);
+
+  // Load stores from backend API
+  useEffect(() => {
+    let isMounted = true;
+    api
+      .getStores(1, 50)
+      .then((res) => {
+        if (!isMounted || !res?.items || res.items.length === 0) return;
+        const mapped: CustomerStoreOption[] = res.items.map((s) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+        }));
+        setStoreOptions(mapped);
+      })
+      .catch((err) => console.warn("Could not load backend stores in CustomerScreen:", err));
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const selectedStore = useMemo(
+    () => storeOptions.find((s) => s.id === selectedStoreId) || storeOptions[0],
+    [storeOptions, selectedStoreId]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -440,7 +479,7 @@ export function CustomerScreen() {
       let finalOrderCode = orderCode;
       try {
         const checkoutPayload: CheckoutOrderPayload = {
-          storeId: "22222222-2222-2222-2222-222222222222",
+          storeId: selectedStoreId,
           orderType: orderType === "dine-in" ? 0 : 1,
           paymentMethod: 2, // VietQR Napas
           items: cart.map((c) => ({
@@ -504,7 +543,7 @@ export function CustomerScreen() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur-md mb-2">
               <Sparkles size={14} className="text-amber-400" />
-              <span>Cổng Đặt Món Khách Hàng · Highlands Lê Lợi Q1</span>
+              <span>Cổng Đặt Món Khách Hàng · {selectedStore?.name || "Chi nhánh Hệ Thống"}</span>
             </div>
             <h1 className="text-2xl lg:text-3xl font-black tracking-tight">Thực Đơn Đặt Món & Tự Phục Vụ</h1>
             <p className="mt-1.5 text-xs sm:text-sm text-rose-100/80 font-normal max-w-xl">
@@ -512,13 +551,37 @@ export function CustomerScreen() {
             </p>
           </div>
 
-          {/* Dine-in Table Selector / Wifi Info */}
+          {/* Dine-in Store & Table Selector / Wifi Info */}
           <div className="flex flex-wrap items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/10">
+            {/* Store Selector */}
+            <div className="flex items-center gap-2 text-xs">
+              <Store size={16} className="text-amber-400 shrink-0" />
+              <div>
+                <span className="text-slate-300 block text-[10px]">Chi nhánh:</span>
+                <select
+                  aria-label="Chọn chi nhánh đặt món"
+                  value={selectedStoreId}
+                  onChange={(e) => setSelectedStoreId(e.target.value)}
+                  className="bg-transparent font-bold text-white text-xs outline-none cursor-pointer"
+                >
+                  {storeOptions.map((s) => (
+                    <option key={s.id} value={s.id} className="text-slate-900">
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="h-6 w-px bg-white/20 hidden sm:block" />
+
+            {/* Table Selector */}
             <div className="flex items-center gap-2 text-xs">
               <MapPin size={16} className="text-amber-400 shrink-0" />
               <div>
                 <span className="text-slate-300 block text-[10px]">Vị trí đặt món:</span>
                 <select
+                  aria-label="Chọn vị trí ngồi"
                   value={tableNumber}
                   onChange={(e) => setTableNumber(e.target.value)}
                   className="bg-transparent font-bold text-white text-xs outline-none cursor-pointer"

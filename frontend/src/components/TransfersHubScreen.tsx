@@ -41,6 +41,18 @@ import {
 } from "../services/transfers.ts";
 import { type User } from "../services/auth.ts";
 import { costingApi, type IngredientItem } from "../services/costing.ts";
+import { api } from "../services/api.ts";
+
+export interface TransferStoreOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
+const defaultTransferStores: TransferStoreOption[] = [
+  { id: "22222222-2222-2222-2222-222222222222", name: "Chi nhánh Quận 1 (Flagship Store)", code: "STORE-Q1" },
+  { id: "33333333-3333-3333-3333-333333333333", name: "Chi nhánh Landmark 81", code: "STORE-L81" },
+];
 
 const initialMockTransfers: StockTransferOrderDto[] = [
   {
@@ -213,7 +225,8 @@ export interface TransfersHubScreenProps {
 
 export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubScreenProps) {
   const [activeTab, setActiveTab] = useState<"transfers" | "warehouse">("transfers");
-  const [orders, setOrders] = useState<StockTransferOrderDto[]>(initialMockTransfers);
+  const [orders, setOrders] = useState<StockTransferOrderDto[]>([]);
+  const [stores, setStores] = useState<TransferStoreOption[]>(defaultTransferStores);
   const [warehouses, setWarehouses] = useState<WarehouseDto[]>(initialMockWarehouses);
   const [warehouseInventory, setWarehouseInventory] = useState<WarehouseInventoryDto[]>(initialMockWhInventory);
   const [ingredients, setIngredients] = useState<IngredientItem[]>([]);
@@ -255,18 +268,22 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
   const loadData = async () => {
     try {
       setLoading(true);
-      const [apiOrders, apiWh, apiIngs] = await Promise.all([
-        getTransferOrders().catch(() => initialMockTransfers),
+      const [apiOrders, apiWh, apiIngs, apiStores] = await Promise.all([
+        getTransferOrders().catch(() => []),
         getWarehouses().catch(() => initialMockWarehouses),
         costingApi.getIngredients().catch(() => []),
+        api.getStores(1, 50).catch(() => null),
       ]);
-      if (apiOrders && apiOrders.length > 0) setOrders(apiOrders);
+      if (Array.isArray(apiOrders)) setOrders(apiOrders);
       if (apiWh && apiWh.length > 0) {
         setWarehouses(apiWh);
         const inv = await getWarehouseInventory(apiWh[0].id).catch(() => initialMockWhInventory);
         setWarehouseInventory(inv);
       }
       if (apiIngs && apiIngs.length > 0) setIngredients(apiIngs);
+      if (apiStores && apiStores.items && apiStores.items.length > 0) {
+        setStores(apiStores.items.map((s) => ({ id: s.id, name: s.name, code: s.code })));
+      }
     } finally {
       setLoading(false);
     }
@@ -796,8 +813,11 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                   onChange={(e) => setCreateStoreId(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-red-800"
                 >
-                  <option value="22222222-2222-2222-2222-222222222222">Highlands Lê Lợi Q1 (STORE-Q1)</option>
-                  <option value="33333333-3333-3333-3333-333333333333">Highlands Landmark 81 (STORE-L81)</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
                 </select>
               </div>
 

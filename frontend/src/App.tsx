@@ -99,6 +99,7 @@ import {
 } from "./services/api.ts";
 import { ReceiptModal, type ReceiptData } from "./components/ReceiptModal.tsx";
 import { VietQrModal } from "./components/VietQrModal.tsx";
+import { reportsService } from "./services/reports.ts";
 
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
@@ -849,11 +850,9 @@ function Header({
 }
 
 const initialStores = [
-  { code: "STORE-Q1", name: "Chi nhánh Quận 1 (Flagship Store)", address: "12 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh", phone: "028 3822 1234", revenue: "₫18.4m", active: true },
-  { code: "STORE-L81", name: "Chi nhánh Landmark 81", address: "Tầng trệt Landmark 81, Vinhomes Central Park, Bình Thạnh, TP.HCM", phone: "028 3999 5678", revenue: "₫22.8m", active: true },
-  { code: "DN-04", name: "Heritage Bạch Đằng", address: "96 Bạch Đằng, Hải Châu, Đà Nẵng", phone: "+84 236 388 1132", revenue: "₫12.1m", active: true },
-  { code: "HN-07", name: "Heritage Hồ Gươm", address: "12 Lê Thái Tổ, Hoàn Kiếm, Hà Nội", phone: "+84 24 3928 8228", revenue: "₫16.7m", active: true },
-  { code: "CT-03", name: "Mekong Ninh Kiều", address: "02 Hai Bà Trưng, Ninh Kiều, Cần Thơ", phone: "+84 292 381 2888", revenue: "₫8.9m", active: false },
+  { code: "STORE-Q1", name: "Chi nhánh Quận 1 (Flagship Store)", address: "12 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh", phone: "028 3822 1234", revenue: "₫0.0m", active: true },
+  { code: "STORE-L81", name: "Chi nhánh Landmark 81", address: "Tầng trệt Landmark 81, Vinhomes Central Park, Bình Thạnh, TP.HCM", phone: "028 3999 5678", revenue: "₫0.0m", active: true },
+  { code: "STORE-DN01", name: "Chi nhánh Đà Nẵng", address: "96 Bạch Đằng, Hải Châu, Đà Nẵng", phone: "+84 236 388 1132", revenue: "₫0.0m", active: true },
 ];
 
 function PageHeading({ eyebrow, title, description, actions }: { eyebrow: string; title: string; description: string; actions?: ReactNode }) {
@@ -887,17 +886,28 @@ function StoresScreen({
 
   useEffect(() => {
     let isMounted = true;
-    api.getStores(1, 50)
-      .then((res) => {
+    Promise.all([
+      api.getStores(1, 50).catch(() => null),
+      reportsService.getNetworkOverview().catch(() => null),
+    ])
+      .then(([res, netOverview]) => {
         if (!isMounted || !res?.items || res.items.length === 0) return;
-        const mapped = res.items.map((s) => ({
-          code: s.code,
-          name: s.name,
-          address: s.address,
-          phone: s.phoneNumber || "+84 28 3822 2211",
-          revenue: "₫18.4m",
-          active: s.isActive,
-        }));
+        const rankings = netOverview?.storeRankings || [];
+        const mapped = res.items.map((s) => {
+          const ranking = rankings.find((r) => r.storeId === s.id || r.storeCode === s.code);
+          const revValue = ranking ? ranking.netRevenue : 0;
+          const formattedRev = revValue > 0
+            ? (revValue >= 1000000 ? `₫${(revValue / 1000000).toFixed(1)}m` : `₫${(revValue / 1000).toFixed(0)}k`)
+            : "₫0.0m";
+          return {
+            code: s.code,
+            name: s.name,
+            address: s.address,
+            phone: s.phoneNumber || "+84 28 3822 2211",
+            revenue: formattedRev,
+            active: s.isActive,
+          };
+        });
         setStoreList(mapped);
       })
       .catch((err) => console.warn("Could not load backend stores:", err));
@@ -1904,26 +1914,7 @@ function PosScreen({
     const list = Array.from(new Set(productList.map((p) => p.category)));
     return ["All", ...list];
   }, [productList]);
-  const [cart, setCart] = useState<CartItem[]>([
-    {
-      id: "init-1",
-      productId: "09ffff04-0f0b-4200-994a-d7decc20d2cc",
-      name: "Phin Sữa Đá Đậm Đà",
-      price: 29000,
-      quantity: 1,
-      size: "M",
-      toppings: ["Black pearl"],
-    },
-    {
-      id: "init-2",
-      productId: "577d3866-b7c3-4189-8e7f-2340224991de",
-      name: "Freeze Trà Xanh Thạch",
-      price: 55000,
-      quantity: 1,
-      size: "L",
-      toppings: ["Cheese foam"],
-    },
-  ]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [payment, setPayment] = useState<Payment>("Cash");
   const [orderType, setOrderType] = useState("Take-away");
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -1933,10 +1924,25 @@ function PosScreen({
   const [showVietQrModal, setShowVietQrModal] = useState<boolean>(false);
 
   const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";
-  const effectiveStoreName =
-    currentUser?.storeId === "33333333-3333-3333-3333-333333333333"
-      ? "Chi nhánh Landmark 81"
-      : "Chi nhánh Quận 1 (Flagship Store)";
+  const [storeDisplayName, setStoreDisplayName] = useState<string>("Chi nhánh Quận 1 (Flagship Store)");
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getStores(1, 50)
+      .then((res) => {
+        if (!isMounted || !res?.items) return;
+        const matched = res.items.find((s) => s.id === effectiveStoreId);
+        if (matched) {
+          setStoreDisplayName(matched.name);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [effectiveStoreId]);
+
+  const effectiveStoreName = storeDisplayName;
   const cashierDisplayName = currentUser?.fullName || currentUser?.username || "Linh (Thu ngân 01)";
 
   useEffect(() => {
