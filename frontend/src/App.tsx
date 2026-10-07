@@ -80,8 +80,17 @@ import {
   syncPendingOfflineOrders,
   initOfflineSyncListeners,
 } from "./services/posSync.ts";
+import {
+  canAccessScreen,
+  canAccessPortal,
+  filterStaffNavItems,
+  filterAdminNavItems,
+  getDefaultScreenForUser,
+  getPortalForScreen,
+  type Screen,
+  type Portal,
+} from "./services/rbac.ts";
 
-type Screen = "landing" | "customer" | "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics";
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
 
@@ -147,14 +156,6 @@ function Panel({ children, className = "" }: { children: ReactNode; className?: 
   return <section className={`rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] ${className}`}>{children}</section>;
 }
 
-export type Portal = "landing" | "customer" | "staff" | "admin";
-
-export function getPortalForScreen(s: Screen): Portal {
-  if (s === "landing") return "landing";
-  if (s === "customer") return "customer";
-  if (s === "pos" || s === "kds" || s === "transfers") return "staff";
-  return "admin"; // stores, inventory, bom-studio, analytics
-}
 
 const navItems = [
   { id: "landing" as Screen, label: "Tổng Quan", sub: "Cổng phân quyền", icon: Sparkles },
@@ -488,21 +489,34 @@ function Header({
               <span className="font-bold text-slate-800 whitespace-nowrap">Bàn 05 · Highlands Lê Lợi Q1</span>
             </div>
 
-            <button
-              onClick={() => setScreen("pos")}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95 whitespace-nowrap shrink-0"
-            >
-              <LayoutGrid size={13} className="text-slate-500 shrink-0" />
-              <span className="hidden md:inline">Cổng Cửa Hàng (POS)</span>
-              <span className="md:hidden">Cổng POS</span>
-            </button>
-            <button
-              onClick={() => setScreen("analytics")}
-              className="hidden lg:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95 whitespace-nowrap shrink-0"
-            >
-              <Building2 size={13} className="text-slate-500 shrink-0" />
-              <span>Cổng Trụ Sở HQ</span>
-            </button>
+            {canAccessScreen("pos", currentUser) && (
+              <button
+                onClick={() => setScreen("pos")}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95 whitespace-nowrap shrink-0"
+              >
+                <LayoutGrid size={13} className="text-slate-500 shrink-0" />
+                <span className="hidden md:inline">Cổng Cửa Hàng (POS)</span>
+                <span className="md:hidden">Cổng POS</span>
+              </button>
+            )}
+            {canAccessPortal("admin", currentUser) && (
+              <button
+                onClick={() => setScreen("analytics")}
+                className="hidden lg:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95 whitespace-nowrap shrink-0"
+              >
+                <Building2 size={13} className="text-slate-500 shrink-0" />
+                <span>Cổng Trụ Sở HQ</span>
+              </button>
+            )}
+            {!currentUser && (
+              <ShiftUserButton
+                currentUser={currentUser}
+                openLogin={openLogin}
+                onLogout={onLogout}
+                label="Đăng nhập NV"
+                tone="red"
+              />
+            )}
           </div>
         </div>
       </header>
@@ -511,6 +525,7 @@ function Header({
 
   // 2. CỔNG CỬA HÀNG / NHÂN VIÊN (STAFF PORTAL: POS, KDS, TRANSFERS)
   if (portal === "staff") {
+    const visibleStaffNavItems = filterStaffNavItems(staffNavItems, currentUser);
     return (
       <header className="sticky top-0 z-40 border-b border-amber-200/80 bg-white/95 backdrop-blur-xl shadow-2xs">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-2 sm:gap-4 px-3 sm:px-4 lg:px-6">
@@ -534,9 +549,9 @@ function Header({
             </span>
           </div>
 
-          {/* 3 Staff Navigation Tabs */}
+          {/* Staff Navigation Tabs - Filtered strictly by role */}
           <nav className="hidden lg:flex items-center rounded-2xl bg-slate-100/90 p-1 mx-auto" aria-label="Staff navigation">
-            {staffNavItems.map((item) => {
+            {visibleStaffNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = screen === item.id;
               return (
@@ -556,15 +571,17 @@ function Header({
 
           {/* Right Actions Toolbar */}
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Quick Switch to HQ Admin */}
-            <button
-              onClick={() => setScreen("analytics")}
-              className="hidden md:inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition whitespace-nowrap shrink-0"
-              title="Chuyển sang Cổng Quản Trị HQ"
-            >
-              <Building2 size={13} className="text-slate-400 shrink-0" />
-              <span>Sang Cổng HQ</span>
-            </button>
+            {/* Quick Switch to HQ Admin - Only if authorized */}
+            {canAccessPortal("admin", currentUser) && (
+              <button
+                onClick={() => setScreen("analytics")}
+                className="hidden md:inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition whitespace-nowrap shrink-0"
+                title="Chuyển sang Cổng Quản Trị HQ"
+              >
+                <Building2 size={13} className="text-slate-400 shrink-0" />
+                <span>Sang Cổng HQ</span>
+              </button>
+            )}
 
             {/* Quick Link to Customer Menu */}
             <button
@@ -614,9 +631,9 @@ function Header({
           </div>
         </div>
 
-        {/* Mobile Navigation for Staff */}
+        {/* Mobile Navigation for Staff - Filtered */}
         <nav className="flex lg:hidden overflow-x-auto border-t border-slate-100 px-2 py-1.5 gap-1" aria-label="Staff mobile nav">
-          {staffNavItems.map((item) => (
+          {visibleStaffNavItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setScreen(item.id)}
@@ -627,12 +644,14 @@ function Header({
               {item.label}
             </button>
           ))}
-          <button
-            onClick={() => setScreen("analytics")}
-            className="ml-auto whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 shrink-0"
-          >
-            Sang Cổng HQ →
-          </button>
+          {canAccessPortal("admin", currentUser) && (
+            <button
+              onClick={() => setScreen("analytics")}
+              className="ml-auto whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 shrink-0"
+            >
+              Sang Cổng HQ →
+            </button>
+          )}
         </nav>
       </header>
     );
@@ -640,6 +659,7 @@ function Header({
 
   // 3. CỔNG TRỤ SỞ QUẢN TRỊ (HQ ADMIN PORTAL: STORES, ANALYTICS, BOM-STUDIO, INVENTORY)
   if (portal === "admin") {
+    const visibleAdminNavItems = filterAdminNavItems(adminNavItems, currentUser);
     return (
       <header className="sticky top-0 z-40 border-b border-red-200/80 bg-white/95 backdrop-blur-xl shadow-2xs">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-2 sm:gap-4 px-3 sm:px-4 lg:px-6">
@@ -663,9 +683,9 @@ function Header({
             </span>
           </div>
 
-          {/* 4 Admin Navigation Tabs */}
+          {/* Admin Navigation Tabs - Filtered strictly by role */}
           <nav className="hidden lg:flex items-center rounded-2xl bg-slate-100/90 p-1 mx-auto" aria-label="HQ Admin navigation">
-            {adminNavItems.map((item) => {
+            {visibleAdminNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = screen === item.id;
               return (
@@ -685,15 +705,17 @@ function Header({
 
           {/* Right Actions Toolbar */}
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Quick Switch to Store POS */}
-            <button
-              onClick={() => setScreen("pos")}
-              className="hidden md:inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition whitespace-nowrap shrink-0"
-              title="Chuyển sang Quầy Thu Ngân Cửa Hàng"
-            >
-              <LayoutGrid size={13} className="text-slate-400 shrink-0" />
-              <span>Sang Cổng Cửa Hàng</span>
-            </button>
+            {/* Quick Switch to Store POS - Only if authorized */}
+            {canAccessPortal("staff", currentUser) && (
+              <button
+                onClick={() => setScreen("pos")}
+                className="hidden md:inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition whitespace-nowrap shrink-0"
+                title="Chuyển sang Quầy Thu Ngân Cửa Hàng"
+              >
+                <LayoutGrid size={13} className="text-slate-400 shrink-0" />
+                <span>Sang Cổng Cửa Hàng</span>
+              </button>
+            )}
 
             {/* Admin User Button */}
             <ShiftUserButton
@@ -727,9 +749,9 @@ function Header({
           </div>
         </div>
 
-        {/* Mobile Navigation for Admin */}
+        {/* Mobile Navigation for Admin - Filtered */}
         <nav className="flex lg:hidden overflow-x-auto border-t border-slate-100 px-2 py-1.5 gap-1" aria-label="Admin mobile nav">
-          {adminNavItems.map((item) => (
+          {visibleAdminNavItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setScreen(item.id)}
@@ -740,12 +762,14 @@ function Header({
               {item.label}
             </button>
           ))}
-          <button
-            onClick={() => setScreen("pos")}
-            className="ml-auto whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 shrink-0"
-          >
-            Sang Cổng POS →
-          </button>
+          {canAccessPortal("staff", currentUser) && (
+            <button
+              onClick={() => setScreen("pos")}
+              className="ml-auto whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 shrink-0"
+            >
+              Sang Cổng POS →
+            </button>
+          )}
         </nav>
       </header>
     );
@@ -766,7 +790,7 @@ function Header({
           </div>
         </div>
 
-        {/* 3 Portal Links */}
+        {/* 3 Portal Links - Filtered by role */}
         <nav className="hidden md:flex items-center gap-1 rounded-2xl bg-slate-100 p-1 mx-auto" aria-label="Landing Portals">
           <button
             onClick={() => setScreen("customer")}
@@ -775,20 +799,24 @@ function Header({
             <ShoppingBag size={14} className="text-rose-600 shrink-0" />
             <span>1. Khách Đặt Món</span>
           </button>
-          <button
-            onClick={() => setScreen("pos")}
-            className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-white hover:text-slate-950 transition whitespace-nowrap shrink-0"
-          >
-            <LayoutGrid size={14} className="text-amber-600 shrink-0" />
-            <span>2. Cửa Hàng (POS & KDS)</span>
-          </button>
-          <button
-            onClick={() => setScreen("analytics")}
-            className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-white hover:text-slate-950 transition whitespace-nowrap shrink-0"
-          >
-            <Building2 size={14} className="text-red-700 shrink-0" />
-            <span>3. Quản Trị Trụ Sở HQ</span>
-          </button>
+          {canAccessPortal("staff", currentUser) && (
+            <button
+              onClick={() => setScreen("pos")}
+              className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-white hover:text-slate-950 transition whitespace-nowrap shrink-0"
+            >
+              <LayoutGrid size={14} className="text-amber-600 shrink-0" />
+              <span>2. Cửa Hàng (POS & KDS)</span>
+            </button>
+          )}
+          {canAccessPortal("admin", currentUser) && (
+            <button
+              onClick={() => setScreen("analytics")}
+              className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-white hover:text-slate-950 transition whitespace-nowrap shrink-0"
+            >
+              <Building2 size={14} className="text-red-700 shrink-0" />
+              <span>3. Quản Trị Trụ Sở HQ</span>
+            </button>
+          )}
         </nav>
 
         {/* Right Login & Status */}
@@ -2761,6 +2789,21 @@ export default function App() {
     };
   }, []);
 
+  // Strict RBAC Guard: If current screen is forbidden for user role, auto-redirect to permitted default
+  useEffect(() => {
+    if (!canAccessScreen(screen, currentUser)) {
+      setScreen(getDefaultScreenForUser(currentUser));
+    }
+  }, [screen, currentUser]);
+
+  const handleSetScreen = (newScreen: Screen) => {
+    if (canAccessScreen(newScreen, currentUser)) {
+      setScreen(newScreen);
+    } else {
+      setScreen(getDefaultScreenForUser(currentUser));
+    }
+  };
+
   const title = useMemo(() => navItems.find((item) => item.id === screen)?.label, [screen]);
 
   return (
@@ -2770,13 +2813,14 @@ export default function App() {
       </a>
       <Header
         screen={screen}
-        setScreen={setScreen}
+        setScreen={handleSetScreen}
         connectionStatus={connectionStatus}
         currentUser={currentUser}
         openLogin={() => setModal("login")}
         onLogout={() => {
           apiLogout();
           setCurrentUser(null);
+          setScreen("landing");
         }}
         notifications={notifications}
         unreadCount={notifications.filter((n) => !n.isRead).length}
@@ -2791,7 +2835,13 @@ export default function App() {
         onMarkAllRead={handleMarkAllRead}
       />
       <div id="main-content" aria-label={title} className="w-full max-w-[100vw] overflow-x-hidden">
-        {screen === "landing" && <LandingScreen onNavigate={(s) => setScreen(s)} openLogin={() => setModal("login")} />}
+        {screen === "landing" && (
+          <LandingScreen
+            currentUser={currentUser}
+            onNavigate={handleSetScreen}
+            openLogin={() => setModal("login")}
+          />
+        )}
         {screen === "customer" && <CustomerScreen />}
         {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
         {screen === "inventory" && <InventoryScreen openModal={setModal} inventory={inventory} activeAlert={activeAlert} />}
@@ -2809,6 +2859,7 @@ export default function App() {
             onLoginSuccess={(u) => {
               setCurrentUser(u);
               realtimeHub.start();
+              setScreen(getDefaultScreenForUser(u));
             }}
           />
         )}
@@ -2841,16 +2892,18 @@ export default function App() {
               <p className="mt-1 truncate text-xs font-black text-slate-900">{activeToast.title}</p>
               <p className="text-xs font-bold text-emerald-700">{activeToast.detail}</p>
               <div className="mt-2.5 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setScreen("kds");
-                    setActiveToast(null);
-                  }}
-                  className="rounded-lg bg-red-700 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-red-800"
-                >
-                  Xem KDS
-                </button>
+                {canAccessScreen("kds", currentUser) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSetScreen("kds");
+                      setActiveToast(null);
+                    }}
+                    className="rounded-lg bg-red-700 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-red-800"
+                  >
+                    Xem KDS
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setActiveToast(null)}
@@ -2870,6 +2923,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
 
       <div className="pointer-events-none fixed bottom-4 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-[10px] font-bold text-slate-500 shadow-lg backdrop-blur md:flex lg:hidden">
         <Wifi size={12} className={connectionStatus === "Connected" ? "text-emerald-600" : "text-amber-500"} /> Live operations · {connectionStatus}

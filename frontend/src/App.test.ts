@@ -258,6 +258,126 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(getPortalForScreen("bom-studio"), "admin");
     assert.equal(getPortalForScreen("inventory"), "admin");
   });
+
+  it('strictly enforces role permissions for POS_Cashier, Store_Manager, Supply_Chain, HQ_SuperAdmin, and Guest', async () => {
+    const {
+      canAccessScreen,
+      canAccessPortal,
+      getDefaultScreenForUser,
+      filterStaffNavItems,
+      filterAdminNavItems,
+    } = await import('./services/rbac.ts');
+
+    const guestUser = null;
+    const cashierUser = {
+      id: '1',
+      username: 'cashier_q1',
+      email: 'cashier@franchise.local',
+      fullName: 'Cashier Lê Lợi',
+      role: 'POS_Cashier',
+      isActive: true,
+    };
+    const managerUser = {
+      id: '2',
+      username: 'manager_q1',
+      email: 'manager@franchise.local',
+      fullName: 'Manager Lê Lợi',
+      role: 'Store_Manager',
+      isActive: true,
+    };
+    const supplyChainUser = {
+      id: '3',
+      username: 'supply_officer',
+      email: 'supply@franchise.local',
+      fullName: 'Supply Chain Officer',
+      role: 'Supply_Chain_Officer',
+      isActive: true,
+    };
+    const adminUser = {
+      id: '4',
+      username: 'admin',
+      email: 'admin@franchise.local',
+      fullName: 'HQ Administrator',
+      role: 'HQ_SuperAdmin',
+      isActive: true,
+    };
+
+    // 1. Guest: only landing and customer
+    assert.equal(canAccessScreen('customer', guestUser), true);
+    assert.equal(canAccessScreen('landing', guestUser), true);
+    assert.equal(canAccessScreen('pos', guestUser), false);
+    assert.equal(canAccessScreen('kds', guestUser), false);
+    assert.equal(canAccessScreen('transfers', guestUser), false);
+    assert.equal(canAccessScreen('analytics', guestUser), false);
+    assert.equal(canAccessPortal('customer', guestUser), true);
+    assert.equal(canAccessPortal('staff', guestUser), false);
+    assert.equal(canAccessPortal('admin', guestUser), false);
+
+    // 2. POS_Cashier: customer, pos, kds, landing ONLY. No transfers, stores, analytics, bom-studio.
+    assert.equal(canAccessScreen('pos', cashierUser), true);
+    assert.equal(canAccessScreen('kds', cashierUser), true);
+    assert.equal(canAccessScreen('customer', cashierUser), true);
+    assert.equal(canAccessScreen('transfers', cashierUser), false);
+    assert.equal(canAccessScreen('stores', cashierUser), false);
+    assert.equal(canAccessScreen('analytics', cashierUser), false);
+    assert.equal(canAccessScreen('bom-studio', cashierUser), false);
+    assert.equal(canAccessPortal('staff', cashierUser), true);
+    assert.equal(canAccessPortal('admin', cashierUser), false);
+    assert.equal(getDefaultScreenForUser(cashierUser), 'pos');
+
+    // Filter staff nav for Cashier: hides transfers
+    const staffNav = [
+      { id: 'pos' as const, label: 'POS Terminal' },
+      { id: 'kds' as const, label: 'Kitchen KDS' },
+      { id: 'transfers' as const, label: 'Kho & STO' },
+    ];
+    const cashierNav = filterStaffNavItems(staffNav, cashierUser);
+    assert.equal(cashierNav.length, 2);
+    assert.deepEqual(cashierNav.map(n => n.id), ['pos', 'kds']);
+
+    // 3. Store_Manager: pos, kds, transfers, inventory, analytics. CANNOT create corporate stores or master BoM.
+    assert.equal(canAccessScreen('pos', managerUser), true);
+    assert.equal(canAccessScreen('kds', managerUser), true);
+    assert.equal(canAccessScreen('transfers', managerUser), true);
+    assert.equal(canAccessScreen('inventory', managerUser), true);
+    assert.equal(canAccessScreen('analytics', managerUser), true);
+    assert.equal(canAccessScreen('stores', managerUser), false);
+    assert.equal(canAccessScreen('bom-studio', managerUser), false);
+    assert.equal(canAccessPortal('admin', managerUser), true);
+    assert.equal(getDefaultScreenForUser(managerUser), 'pos');
+
+    const adminNav = [
+      { id: 'stores' as const, label: 'Store Network' },
+      { id: 'analytics' as const, label: 'Báo Cáo' },
+      { id: 'bom-studio' as const, label: 'BoM Studio' },
+      { id: 'inventory' as const, label: 'Tồn Kho' },
+    ];
+    const managerAdminNav = filterAdminNavItems(adminNav, managerUser);
+    assert.equal(managerAdminNav.length, 2);
+    assert.deepEqual(managerAdminNav.map(n => n.id), ['analytics', 'inventory']);
+
+    // 4. Supply_Chain_Officer: transfers, inventory, bom-studio. No corporate stores or analytics.
+    assert.equal(canAccessScreen('transfers', supplyChainUser), true);
+    assert.equal(canAccessScreen('inventory', supplyChainUser), true);
+    assert.equal(canAccessScreen('bom-studio', supplyChainUser), true);
+    assert.equal(canAccessScreen('stores', supplyChainUser), false);
+    assert.equal(canAccessScreen('analytics', supplyChainUser), false);
+    assert.equal(getDefaultScreenForUser(supplyChainUser), 'transfers');
+
+    const supplyAdminNav = filterAdminNavItems(adminNav, supplyChainUser);
+    assert.equal(supplyAdminNav.length, 2);
+    assert.deepEqual(supplyAdminNav.map(n => n.id), ['bom-studio', 'inventory']);
+
+    // 5. HQ_SuperAdmin: has access to all screens and portals
+    assert.equal(canAccessScreen('stores', adminUser), true);
+    assert.equal(canAccessScreen('bom-studio', adminUser), true);
+    assert.equal(canAccessScreen('analytics', adminUser), true);
+    assert.equal(canAccessScreen('transfers', adminUser), true);
+    assert.equal(canAccessScreen('pos', adminUser), true);
+    assert.equal(canAccessPortal('admin', adminUser), true);
+    assert.equal(canAccessPortal('staff', adminUser), true);
+    assert.equal(filterAdminNavItems(adminNav, adminUser).length, 4);
+  });
 });
 
 

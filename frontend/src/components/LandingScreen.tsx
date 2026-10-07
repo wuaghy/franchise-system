@@ -5,24 +5,134 @@ import {
   Coffee,
   Truck,
   Building2,
-  QrCode,
-  ShieldCheck,
-  Zap,
   TrendingUp,
   ShoppingBag,
   ArrowRight,
-  Server,
-  Cloud,
-  CheckCircle2,
-  Users,
+  Lock,
+  UserCheck,
 } from "lucide-react";
+import type { User } from "../services/auth.ts";
+import { canAccessScreen, type Screen } from "../services/rbac.ts";
 
 interface LandingScreenProps {
-  onNavigate: (screen: "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics" | "customer") => void;
+  currentUser?: User | null;
+  onNavigate: (screen: Screen) => void;
   openLogin: () => void;
 }
 
-export function LandingScreen({ onNavigate, openLogin }: LandingScreenProps) {
+interface GatewayCard {
+  screen: Screen;
+  badge: string;
+  badgeTone: string;
+  icon: typeof ShoppingBag;
+  title: string;
+  description: string;
+  actionText: string;
+  themeClass: {
+    iconBg: string;
+    iconText: string;
+    hoverBg: string;
+    badgeText: string;
+  };
+}
+
+const ALL_GATEWAYS: GatewayCard[] = [
+  {
+    screen: "customer",
+    badge: "Dành Cho Khách Hàng",
+    badgeTone: "text-rose-700",
+    icon: ShoppingBag,
+    title: "Customer Digital Menu & Kiosk",
+    description: "Xem menu đồ uống, tùy chọn đường đá topping, quét mã VietQR Napas thanh toán và tự động phát tín hiệu chuông về quầy pha chế.",
+    actionText: "Trải nghiệm Đặt món Khách",
+    themeClass: {
+      iconBg: "bg-rose-50",
+      iconText: "text-rose-700",
+      hoverBg: "group-hover:bg-red-700 group-hover:text-white",
+      badgeText: "text-rose-700",
+    },
+  },
+  {
+    screen: "pos",
+    badge: "Dành Cho Nhân Viên Thu Ngân",
+    badgeTone: "text-amber-700",
+    icon: LayoutGrid,
+    title: "Quầy Bán Hàng POS Terminal",
+    description: "Bán hàng chạm cực nhạy, hỗ trợ Offline Outbox Pattern tự lưu đơn khi mất mạng, tự động trừ kho nguyên liệu theo BoM công thức.",
+    actionText: "Mở Quầy Thu Ngân POS",
+    themeClass: {
+      iconBg: "bg-amber-50",
+      iconText: "text-amber-700",
+      hoverBg: "group-hover:bg-amber-600 group-hover:text-white",
+      badgeText: "text-amber-700",
+    },
+  },
+  {
+    screen: "kds",
+    badge: "Dành Cho Barista & Bếp",
+    badgeTone: "text-orange-700",
+    icon: Coffee,
+    title: "Màn Hình Điều Phối Bếp KDS",
+    description: "Nhận vé pha chế tức thì qua SignalR, đếm ngược thời gian SLA cảnh báo màu sắc, toggle từng topping và chuông báo khi có đơn mới.",
+    actionText: "Vào Màn Hình KDS",
+    themeClass: {
+      iconBg: "bg-orange-50",
+      iconText: "text-orange-700",
+      hoverBg: "group-hover:bg-orange-600 group-hover:text-white",
+      badgeText: "text-orange-700",
+    },
+  },
+  {
+    screen: "transfers",
+    badge: "Dành Cho Kho Vận Cung Ứng",
+    badgeTone: "text-blue-700",
+    icon: Truck,
+    title: "Chuỗi Cung Ứng & Điều Chuyển STO",
+    description: "Quy trình điều chuyển kho tổng 6 bước chuẩn mực, nhập xuất kho an toàn, lập biên bản tự động và xử lý chênh lệch hàng giao nhận.",
+    actionText: "Quản Lý Điều Chuyển STO",
+    themeClass: {
+      iconBg: "bg-blue-50",
+      iconText: "text-blue-700",
+      hoverBg: "group-hover:bg-blue-600 group-hover:text-white",
+      badgeText: "text-blue-700",
+    },
+  },
+  {
+    screen: "bom-studio",
+    badge: "Dành Cho Bếp Trưởng & Kỹ Thuật COGS",
+    badgeTone: "text-purple-700",
+    icon: Sparkles,
+    title: "BoM Studio & Định Lượng COGS",
+    description: "Mô phỏng kịch bản What-If khi giá nguyên liệu biến động, tính toán chính xác chi phí từng gram/ml và tối ưu biên lợi nhuận món.",
+    actionText: "Vào BoM Studio",
+    themeClass: {
+      iconBg: "bg-purple-50",
+      iconText: "text-purple-700",
+      hoverBg: "group-hover:bg-purple-600 group-hover:text-white",
+      badgeText: "text-purple-700",
+    },
+  },
+  {
+    screen: "analytics",
+    badge: "Dành Cho Quản Trị & Chủ Chuỗi",
+    badgeTone: "text-emerald-700",
+    icon: TrendingUp,
+    title: "Báo Cáo Tài Chính & Phí Royalty",
+    description: "Biểu đồ nhiệt doanh thu 24 giờ, xếp hạng món bán chạy, tự động kết toán và phát hành hóa đơn thu phí nhượng quyền hàng tháng.",
+    actionText: "Xem Báo Cáo Doanh Thu",
+    themeClass: {
+      iconBg: "bg-emerald-50",
+      iconText: "text-emerald-700",
+      hoverBg: "group-hover:bg-emerald-600 group-hover:text-white",
+      badgeText: "text-emerald-700",
+    },
+  },
+];
+
+export function LandingScreen({ currentUser, onNavigate, openLogin }: LandingScreenProps) {
+  // Lọc các cổng truy cập mà người dùng hiện tại có quyền xem
+  const visibleGateways = ALL_GATEWAYS.filter((gw) => canAccessScreen(gw.screen, currentUser ?? null));
+
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-8 lg:px-8">
       {/* Hero Section */}
@@ -50,6 +160,7 @@ export function LandingScreen({ onNavigate, openLogin }: LandingScreenProps) {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
+            {/* Cổng khách hàng luôn sẵn sàng */}
             <button
               onClick={() => onNavigate("customer")}
               className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-red-700 to-rose-700 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-red-900/20 hover:from-red-800 hover:to-rose-800 transition active:scale-95"
@@ -58,20 +169,39 @@ export function LandingScreen({ onNavigate, openLogin }: LandingScreenProps) {
               <span>Khách Hàng Đặt Món Online</span>
               <ArrowRight size={16} />
             </button>
-            <button
-              onClick={() => onNavigate("pos")}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition active:scale-95"
-            >
-              <LayoutGrid size={18} className="text-red-700" />
-              <span>Vào Quầy Thu Ngân POS</span>
-            </button>
-            <button
-              onClick={() => onNavigate("analytics")}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition active:scale-95"
-            >
-              <TrendingUp size={18} className="text-emerald-600" />
-              <span>Báo Cáo Doanh Thu & Royalty</span>
-            </button>
+
+            {/* Chỉ hiển thị POS nếu role có quyền */}
+            {canAccessScreen("pos", currentUser ?? null) && (
+              <button
+                onClick={() => onNavigate("pos")}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition active:scale-95"
+              >
+                <LayoutGrid size={18} className="text-red-700" />
+                <span>Vào Quầy Thu Ngân POS</span>
+              </button>
+            )}
+
+            {/* Chỉ hiển thị Analytics nếu role có quyền */}
+            {canAccessScreen("analytics", currentUser ?? null) && (
+              <button
+                onClick={() => onNavigate("analytics")}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 transition active:scale-95"
+              >
+                <TrendingUp size={18} className="text-emerald-600" />
+                <span>Báo Cáo Doanh Thu & Royalty</span>
+              </button>
+            )}
+
+            {/* Nếu là khách vãng lai, hiển thị nút đăng nhập nhân viên */}
+            {!currentUser && (
+              <button
+                onClick={openLogin}
+                className="inline-flex items-center gap-2 rounded-2xl border border-dashed border-red-300 bg-red-50/70 px-5 py-3.5 text-sm font-bold text-red-800 hover:bg-red-100/70 transition active:scale-95"
+              >
+                <Lock size={16} className="text-red-700" />
+                <span>Đăng Nhập Nhân Viên / Quản Lý</span>
+              </button>
+            )}
           </div>
 
           {/* Quick Metrics */}
@@ -102,161 +232,85 @@ export function LandingScreen({ onNavigate, openLogin }: LandingScreenProps) {
 
       {/* Role Gateways Section */}
       <div className="mt-12">
-        <div className="mb-6 flex items-end justify-between">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div>
             <h2 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-              Cổng Truy Cập Theo Vai Trò (Role Gateways)
+              Cổng Truy Cập Theo Phân Quyền ({currentUser ? `Vai trò: ${currentUser.role}` : "Khách Chưa Đăng Nhập"})
             </h2>
             <p className="mt-1 text-sm text-slate-500 font-medium">
-              Lựa chọn cổng làm việc phù hợp cho nhân viên, quản lý hoặc khách hàng tự phục vụ
+              Chỉ hiển thị các phân hệ mà tài khoản hiện tại được cấp quyền truy cập chính xác.
             </p>
           </div>
+          {currentUser && (
+            <div className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
+              <UserCheck size={15} />
+              <span>{currentUser.fullName} ({currentUser.username})</span>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* 1. Customer Ordering */}
-          <motion.div
-            whileHover={{ y: -4 }}
-            className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition hover:border-red-200 hover:shadow-md"
-          >
-            <div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-700 font-black mb-5 group-hover:bg-red-700 group-hover:text-white transition">
-                <ShoppingBag size={24} />
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-rose-700">Dành Cho Khách Hàng</span>
-              <h3 className="mt-1 text-xl font-black text-slate-900">Customer Digital Menu & Kiosk</h3>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
-                Xem menu đồ uống, tùy chọn đường đá topping, quét mã VietQR Napas thanh toán và tự động phát tín hiệu chuông về quầy pha chế.
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("customer")}
-              className="mt-6 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 group-hover:bg-red-700 group-hover:text-white transition"
-            >
-              <span>Trải nghiệm Đặt món Khách</span>
-              <ArrowRight size={16} />
-            </button>
-          </motion.div>
+          {/* Lặp qua danh sách cổng ĐÃ ĐƯỢC LỌC theo quyền */}
+          {visibleGateways.map((gw) => {
+            const Icon = gw.icon;
+            return (
+              <motion.div
+                key={gw.screen}
+                whileHover={{ y: -4 }}
+                className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition hover:border-red-200 hover:shadow-md"
+              >
+                <div>
+                  <div
+                    className={`flex size-12 items-center justify-center rounded-2xl ${gw.themeClass.iconBg} ${gw.themeClass.iconText} font-black mb-5 ${gw.themeClass.hoverBg} transition`}
+                  >
+                    <Icon size={24} />
+                  </div>
+                  <span className={`text-[11px] font-black uppercase tracking-wider ${gw.themeClass.badgeText}`}>
+                    {gw.badge}
+                  </span>
+                  <h3 className="mt-1 text-xl font-black text-slate-900">{gw.title}</h3>
+                  <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
+                    {gw.description}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onNavigate(gw.screen)}
+                  className={`mt-6 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 ${gw.themeClass.hoverBg} transition`}
+                >
+                  <span>{gw.actionText}</span>
+                  <ArrowRight size={16} />
+                </button>
+              </motion.div>
+            );
+          })}
 
-          {/* 2. POS Cashier */}
-          <motion.div
-            whileHover={{ y: -4 }}
-            className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition hover:border-red-200 hover:shadow-md"
-          >
-            <div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 font-black mb-5 group-hover:bg-amber-600 group-hover:text-white transition">
-                <LayoutGrid size={24} />
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-amber-700">Dành Cho Nhân Viên Thu Ngân</span>
-              <h3 className="mt-1 text-xl font-black text-slate-900">Quầy Bán Hàng POS Terminal</h3>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
-                Bán hàng chạm cực nhạy, hỗ trợ Offline Outbox Pattern tự lưu đơn khi mất mạng, tự động trừ kho nguyên liệu theo BoM công thức.
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("pos")}
-              className="mt-6 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 group-hover:bg-amber-600 group-hover:text-white transition"
+          {/* Nếu là khách vãng lai, hiển thị thêm Thẻ Đăng Nhập để mở khóa phân hệ nội bộ */}
+          {!currentUser && (
+            <motion.div
+              whileHover={{ y: -4 }}
+              className="group relative flex flex-col justify-between rounded-3xl border border-dashed border-amber-300 bg-gradient-to-br from-amber-50/50 to-white p-7 shadow-sm transition hover:border-amber-400 hover:shadow-md"
             >
-              <span>Mở Quầy Thu Ngân POS</span>
-              <ArrowRight size={16} />
-            </button>
-          </motion.div>
-
-          {/* 3. Kitchen Barista KDS */}
-          <motion.div
-            whileHover={{ y: -4 }}
-            className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition hover:border-red-200 hover:shadow-md"
-          >
-            <div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-700 font-black mb-5 group-hover:bg-orange-600 group-hover:text-white transition">
-                <Coffee size={24} />
+              <div>
+                <div className="flex size-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 font-black mb-5 group-hover:bg-amber-600 group-hover:text-white transition">
+                  <Lock size={24} />
+                </div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-amber-800">
+                  Phân Hệ Nội Bộ Nhân Viên & Quản Trị
+                </span>
+                <h3 className="mt-1 text-xl font-black text-slate-900">Đăng Nhập Nhận Ca & Quản Trị</h3>
+                <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
+                  Dành cho nhân viên thu ngân POS, barista bếp KDS, quản lý kho STO và quản trị viên HQ. Vui lòng đăng nhập để mở các cổng nghiệp vụ tương ứng.
+                </p>
               </div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-orange-700">Dành Cho Barista & Bếp</span>
-              <h3 className="mt-1 text-xl font-black text-slate-900">Màn Hình Điều Phối Bếp KDS</h3>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
-                Nhận vé pha chế tức thì qua SignalR, đếm ngược thời gian SLA cảnh báo màu sắc, toggle từng topping và chuông báo khi có đơn mới.
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("kds")}
-              className="mt-6 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 group-hover:bg-orange-600 group-hover:text-white transition"
-            >
-              <span>Vào Màn Hình KDS</span>
-              <ArrowRight size={16} />
-            </button>
-          </motion.div>
-
-          {/* 4. Supply Chain STO */}
-          <motion.div
-            whileHover={{ y: -4 }}
-            className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition hover:border-red-200 hover:shadow-md"
-          >
-            <div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 font-black mb-5 group-hover:bg-blue-600 group-hover:text-white transition">
-                <Truck size={24} />
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-blue-700">Dành Cho Kho Vận Cung Ứng</span>
-              <h3 className="mt-1 text-xl font-black text-slate-900">Chuỗi Cung Ứng & Điều Chuyển STO</h3>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
-                Quy trình điều chuyển kho tổng 6 bước chuẩn mực, nhập xuất kho an toàn, lập biên bản tự động và xử lý chênh lệch hàng giao nhận.
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("transfers")}
-              className="mt-6 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 group-hover:bg-blue-600 group-hover:text-white transition"
-            >
-              <span>Quản Lý Điều Chuyển STO</span>
-              <ArrowRight size={16} />
-            </button>
-          </motion.div>
-
-          {/* 5. BoM Studio */}
-          <motion.div
-            whileHover={{ y: -4 }}
-            className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition hover:border-red-200 hover:shadow-md"
-          >
-            <div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-purple-50 text-purple-700 font-black mb-5 group-hover:bg-purple-600 group-hover:text-white transition">
-                <Sparkles size={24} />
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-purple-700">Dành Cho Bếp Trưởng & Tài Chính</span>
-              <h3 className="mt-1 text-xl font-black text-slate-900">BoM Studio & Định Lượng COGS</h3>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
-                Mô phỏng kịch bản What-If khi giá nguyên liệu biến động, tính toán chính xác chi phí từng gram/ml và tối ưu biên lợi nhuận món.
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("bom-studio")}
-              className="mt-6 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 group-hover:bg-purple-600 group-hover:text-white transition"
-            >
-              <span>Vào BoM Studio</span>
-              <ArrowRight size={16} />
-            </button>
-          </motion.div>
-
-          {/* 6. HQ Admin & BI */}
-          <motion.div
-            whileHover={{ y: -4 }}
-            className="group relative flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-7 shadow-sm transition hover:border-red-200 hover:shadow-md"
-          >
-            <div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 font-black mb-5 group-hover:bg-emerald-600 group-hover:text-white transition">
-                <TrendingUp size={24} />
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700">Dành Cho Chủ Chuỗi (Franchise Owner)</span>
-              <h3 className="mt-1 text-xl font-black text-slate-900">Báo Cáo Tài Chính & Phí Royalty</h3>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed font-normal">
-                Biểu đồ nhiệt doanh thu 24 giờ, xếp hạng món bán chạy, tự động kết toán và phát hành hóa đơn thu phí nhượng quyền hàng tháng.
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("analytics")}
-              className="mt-6 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 group-hover:bg-emerald-600 group-hover:text-white transition"
-            >
-              <span>Xem Báo Cáo Doanh Thu</span>
-              <ArrowRight size={16} />
-            </button>
-          </motion.div>
+              <button
+                onClick={openLogin}
+                className="mt-6 flex items-center justify-between rounded-xl bg-amber-600 px-4 py-3 text-xs font-bold text-white shadow-sm hover:bg-amber-700 transition"
+              >
+                <span>Đăng Nhập Tài Khoản Ngay</span>
+                <ArrowRight size={16} />
+              </button>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>
