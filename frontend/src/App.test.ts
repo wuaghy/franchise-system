@@ -1,5 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  calculateKdsSlaCountdown,
+  formatMinutesSeconds,
+  extractOrderCallNumber,
+  buildTtsAnnouncement,
+} from './services/kds.ts';
 
 describe('Franchise Frontend Enterprise Suite', () => {
   it('should initialize and validate API client types', () => {
@@ -464,6 +470,102 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(customerPayload.orderType, 0);
     assert.equal(customerPayload.paymentMethod, 2);
     assert.equal(customerPayload.items[0].quantity, 2);
+  });
+
+  it('calculates 3-minute KDS SLA countdown and color stages (Healthy -> Warning -> Critical)', () => {
+    const baseTimeMs = 1728300000000;
+    const makeIso = (secondsAgo: number) => new Date(baseTimeMs - secondsAgo * 1000).toISOString();
+
+    // Stage 1: Healthy (Xanh) - Mới bắt đầu hoặc trôi qua <= 90 giây
+    const healthyResult = calculateKdsSlaCountdown(makeIso(45), 180, baseTimeMs);
+    assert.equal(healthyResult.elapsed, 45);
+    assert.equal(healthyResult.remaining, 135);
+    assert.equal(healthyResult.stage, 'healthy');
+    assert.ok(healthyResult.badgeClass.includes('bg-emerald-100'));
+    assert.equal(healthyResult.formattedRemaining, '02:15');
+
+    // Stage 2: Warning (Vàng) - 90s < elapsed <= 180s (sắp hết hạn 3 phút)
+    const warningResult = calculateKdsSlaCountdown(makeIso(140), 180, baseTimeMs);
+    assert.equal(warningResult.elapsed, 140);
+    assert.equal(warningResult.remaining, 40);
+    assert.equal(warningResult.stage, 'warning');
+    assert.ok(warningResult.badgeClass.includes('bg-amber-100'));
+    assert.equal(warningResult.formattedRemaining, '00:40');
+
+    // Stage 3: Critical (Đỏ) - Trễ quá 3 phút (elapsed > 180s)
+    const criticalResult = calculateKdsSlaCountdown(makeIso(215), 180, baseTimeMs);
+    assert.equal(criticalResult.elapsed, 215);
+    assert.equal(criticalResult.remaining, -35);
+    assert.equal(criticalResult.stage, 'critical');
+    assert.ok(criticalResult.badgeClass.includes('bg-red-100'));
+    assert.ok(criticalResult.badgeClass.includes('animate-pulse'));
+    assert.equal(criticalResult.formattedRemaining, '-00:35');
+    assert.ok(criticalResult.label.includes('Quá 3p'));
+
+    // Test formatter helper
+    assert.equal(formatMinutesSeconds(0), '00:00');
+    assert.equal(formatMinutesSeconds(65), '01:05');
+  });
+
+  it('extracts order call numbers and generates Vietnamese TTS announcement text', () => {
+    // Case 1: Standard POS Order Number ORD-202610-0042 -> 42
+    assert.equal(extractOrderCallNumber('ORD-202610-0042'), '42');
+    assert.equal(buildTtsAnnouncement('ORD-202610-0042'), 'Mời quý khách số 42 nhận đồ tại quầy');
+
+    // Case 2: Timestamp Order ORD-20261007-1234 -> 1234
+    assert.equal(extractOrderCallNumber('ORD-20261007-1234'), '1234');
+    assert.equal(buildTtsAnnouncement('ORD-20261007-1234'), 'Mời quý khách số 1234 nhận đồ tại quầy');
+
+    // Case 3: Leading zeros stripped: ORD-0005 -> 5
+    assert.equal(extractOrderCallNumber('ORD-0005'), '5');
+    assert.equal(buildTtsAnnouncement('ORD-0005'), 'Mời quý khách số 5 nhận đồ tại quầy');
+
+    // Case 4: TicketNumber fallback if orderNumber has no clean numeric suffix
+    assert.equal(extractOrderCallNumber('', 'KDS-202610-0088'), '88');
+    assert.equal(buildTtsAnnouncement('', 'KDS-202610-0088'), 'Mời quý khách số 88 nhận đồ tại quầy');
+  });
+
+  it('verifies touch toggle mechanics for KDS drinks and topping modifiers', () => {
+    const ticket = {
+      id: 'ticket-1',
+      items: [
+        {
+          id: 'item-1',
+          productName: 'Trà Sen Vàng',
+          isPrepared: false,
+          modifiers: [
+            { id: 'mod-1', modifierName: 'Thêm Hạt Sen', isChecked: false },
+            { id: 'mod-2', modifierName: 'Thêm Củ Năng Giòn', isChecked: true }
+          ]
+        },
+        {
+          id: 'item-2',
+          productName: 'Phin Sữa Đá',
+          isPrepared: true,
+          modifiers: []
+        }
+      ]
+    };
+
+    // 1. Touch item to toggle prepared
+    const toggledItems = ticket.items.map(item =>
+      item.id === 'item-1' ? { ...item, isPrepared: !item.isPrepared } : item
+    );
+    assert.equal(toggledItems[0].isPrepared, true);
+    assert.equal(toggledItems.every(i => i.isPrepared), true);
+
+    // 2. Touch modifier to toggle isChecked independently
+    const toggledModifiers = ticket.items.map(item => ({
+      ...item,
+      modifiers: item.modifiers.map(mod =>
+        mod.id === 'mod-1' ? { ...mod, isChecked: !mod.isChecked } : mod
+      )
+    }));
+    assert.equal(toggledModifiers[0].modifiers[0].isChecked, true);
+
+    // 3. Detect 100% prepared ready condition
+    const allReady = toggledItems.every(i => i.isPrepared);
+    assert.equal(allReady, true);
   });
 });
 

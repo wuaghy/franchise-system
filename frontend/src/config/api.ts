@@ -10,7 +10,11 @@
  *   All requests and SignalR WebSockets will communicate directly with the production backend.
  */
 
-const rawUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const envApiUrl =
+  typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL
+    ? (import.meta as unknown as { env: Record<string, string> }).env.VITE_API_URL
+    : '';
+const rawUrl = (envApiUrl || '').replace(/\/$/, '');
 
 // If page is served over HTTPS and backend URL is HTTP, use relative proxy to avoid Mixed Content blocks
 const isMixedContent =

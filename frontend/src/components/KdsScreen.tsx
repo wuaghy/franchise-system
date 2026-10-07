@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Bell,
-  BellOff,
   Check,
   CheckCircle2,
   Clock,
@@ -21,11 +20,16 @@ import {
 } from "lucide-react";
 import {
   kdsService,
+  calculateKdsSlaCountdown,
+  extractOrderCallNumber,
+  buildTtsAnnouncement,
+  announceCustomerPickup,
   type KitchenTicketDto,
   type KitchenTicketStatus,
 } from "../services/kds.ts";
 import { realtimeHub } from "../services/signalr.ts";
 import { type User } from "../services/auth.ts";
+import { api } from "../services/api.ts";
 
 interface KdsScreenProps {
   currentUser: User | null;
@@ -37,14 +41,14 @@ const mockInitialTickets: KitchenTicketDto[] = [
     id: "90000000-0000-0000-0000-000000000001",
     ticketNumber: "KDS-202610-0012",
     orderId: "80000000-0000-0000-0000-000000000001",
-    storeId: "11111111-1111-1111-1111-111111111111",
+    storeId: "22222222-2222-2222-2222-222222222222",
     orderNumber: "ORD-202610-0042",
     orderType: "DineIn",
     status: "InPreparation",
-    targetPreparationSeconds: 300,
-    createdAt: new Date(Date.now() - 140 * 1000).toISOString(),
-    preparationStartedAt: new Date(Date.now() - 130 * 1000).toISOString(),
-    elapsedSeconds: 130,
+    targetPreparationSeconds: 180,
+    createdAt: new Date(Date.now() - 70 * 1000).toISOString(),
+    preparationStartedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    elapsedSeconds: 60,
     slaStatus: "Healthy",
     items: [
       {
@@ -76,13 +80,13 @@ const mockInitialTickets: KitchenTicketDto[] = [
     id: "90000000-0000-0000-0000-000000000002",
     ticketNumber: "KDS-202610-0013",
     orderId: "80000000-0000-0000-0000-000000000002",
-    storeId: "11111111-1111-1111-1111-111111111111",
+    storeId: "22222222-2222-2222-2222-222222222222",
     orderNumber: "ORD-202610-0043",
     orderType: "TakeAway",
     status: "New",
-    targetPreparationSeconds: 300,
-    createdAt: new Date(Date.now() - 45 * 1000).toISOString(),
-    elapsedSeconds: 45,
+    targetPreparationSeconds: 180,
+    createdAt: new Date(Date.now() - 25 * 1000).toISOString(),
+    elapsedSeconds: 25,
     slaStatus: "Healthy",
     items: [
       {
@@ -103,21 +107,21 @@ const mockInitialTickets: KitchenTicketDto[] = [
     id: "90000000-0000-0000-0000-000000000003",
     ticketNumber: "KDS-202610-0010",
     orderId: "80000000-0000-0000-0000-000000000003",
-    storeId: "11111111-1111-1111-1111-111111111111",
+    storeId: "22222222-2222-2222-2222-222222222222",
     orderNumber: "ORD-202610-0039",
     orderType: "Delivery",
     status: "Ready",
-    targetPreparationSeconds: 300,
-    createdAt: new Date(Date.now() - 280 * 1000).toISOString(),
-    preparationStartedAt: new Date(Date.now() - 260 * 1000).toISOString(),
+    targetPreparationSeconds: 180,
+    createdAt: new Date(Date.now() - 210 * 1000).toISOString(),
+    preparationStartedAt: new Date(Date.now() - 190 * 1000).toISOString(),
     readyAt: new Date(Date.now() - 20 * 1000).toISOString(),
-    elapsedSeconds: 260,
-    slaStatus: "Warning",
+    elapsedSeconds: 190,
+    slaStatus: "Critical",
     items: [
       {
         id: "item-301",
         orderItemId: "oi-301",
-        productName: "Cà Phê Muối Huê",
+        productName: "Cà Phê Muối Xứ Huế",
         quantity: 2,
         specialNote: "Đóng màng seal cẩn thận giao Grab",
         isPrepared: true,
@@ -133,6 +137,7 @@ const availableStores = [
 ];
 
 export function KdsScreen({ currentUser }: KdsScreenProps) {
+  const [storeOptions, setStoreOptions] = useState(availableStores);
   const [selectedStoreId, setSelectedStoreId] = useState<string>(
     currentUser?.storeId || availableStores[0].id
   );
@@ -143,6 +148,42 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
   const [cancelModalTicket, setCancelModalTicket] = useState<KitchenTicketDto | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [submittingAction, setSubmittingAction] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const [activeAnnouncement, setActiveAnnouncement] = useState<{
+    text: string;
+    orderNumber: string;
+    callNumber: string;
+  } | null>(null);
+
+  // Auto-dismiss TTS banner after 5 seconds
+  useEffect(() => {
+    if (activeAnnouncement) {
+      const timer = setTimeout(() => {
+        setActiveAnnouncement(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeAnnouncement]);
+
+  // Load stores from backend API on mount
+  useEffect(() => {
+    api
+      .getStores(1, 50)
+      .then((res) => {
+        if (res && res.items && res.items.length > 0) {
+          setStoreOptions(
+            res.items.map((s) => ({
+              id: s.id,
+              name: s.name,
+              code: s.code,
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        // Keep fallback availableStores
+      });
+  }, []);
 
   // Web Audio chime generator
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -150,7 +191,9 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
   const playChime = () => {
     if (!audioEnabled) return;
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
       if (!audioContextRef.current || audioContextRef.current.state === "suspended") {
         audioContextRef.current = new AudioCtx();
@@ -158,7 +201,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
       const ctx = audioContextRef.current;
       const now = ctx.currentTime;
 
-      // Bell chime tone 1: D5 (587.33 Hz)
+      // Bell tone 1: D5 (587.33 Hz)
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = "sine";
@@ -170,7 +213,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
       osc1.start(now);
       osc1.stop(now + 0.4);
 
-      // Bell chime tone 2: A5 (880 Hz)
+      // Bell tone 2: A5 (880 Hz)
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
       osc2.type = "sine";
@@ -182,7 +225,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
       osc2.start(now + 0.12);
       osc2.stop(now + 0.8);
     } catch {
-      // AudioContext muted or blocked by browser policy until gesture
+      // AudioContext muted or blocked until gesture
     }
   };
 
@@ -191,7 +234,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
     setLoading(true);
     try {
       const data = await kdsService.getActiveTickets(selectedStoreId);
-      if (data && data.length > 0) {
+      if (Array.isArray(data)) {
         setTickets(data);
       }
     } catch {
@@ -230,7 +273,8 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
               ? {
                   ...t,
                   status: data.status as KitchenTicketStatus,
-                  preparationStartedAt: data.status === "InPreparation" ? new Date().toISOString() : t.preparationStartedAt,
+                  preparationStartedAt:
+                    data.status === "InPreparation" ? new Date().toISOString() : t.preparationStartedAt,
                   readyAt: data.status === "Ready" ? new Date().toISOString() : t.readyAt,
                 }
               : t
@@ -263,9 +307,10 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
     };
   }, [selectedStoreId, audioEnabled]);
 
-  // SLA Live Timer: update elapsed seconds every second
+  // SLA Live Timer: update current timestamp every second
   useEffect(() => {
     const timer = setInterval(() => {
+      setNowMs(Date.now());
       setTickets((prev) =>
         prev.map((ticket) => {
           const startTime = ticket.preparationStartedAt || ticket.createdAt;
@@ -274,9 +319,9 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
           let sla: "Healthy" | "Warning" | "Critical" | "Completed" = "Healthy";
           if (ticket.status === "Completed") {
             sla = "Completed";
-          } else if (positiveElapsed > ticket.targetPreparationSeconds) {
+          } else if (positiveElapsed > (ticket.targetPreparationSeconds || 180)) {
             sla = "Critical";
-          } else if (positiveElapsed > 180) {
+          } else if (positiveElapsed > 90) {
             sla = "Warning";
           }
           return {
@@ -358,12 +403,15 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
     }
   };
 
+  // Nút "Hoàn thành / Trả món" (POST /kds/tickets/{id}/ready) + Phát TTS
   const handleMarkReady = async (ticket: KitchenTicketDto) => {
     setSubmittingAction(`ready-${ticket.id}`);
+    const callNumber = extractOrderCallNumber(ticket.orderNumber, ticket.ticketNumber);
+    const speechText = buildTtsAnnouncement(ticket.orderNumber, ticket.ticketNumber);
+
     try {
       const updated = await kdsService.markReady(selectedStoreId, ticket.id);
       setTickets((prev) => prev.map((t) => (t.id === ticket.id ? updated : t)));
-      playChime();
     } catch {
       setTickets((prev) =>
         prev.map((t) =>
@@ -378,7 +426,40 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
       );
     } finally {
       setSubmittingAction(null);
+
+      // 1. Phát chuông ding-dong báo âm thanh
+      playChime();
+
+      // 2. Phát thông báo giọng nói TTS "Mời quý khách số ... nhận đồ tại quầy"
+      if (audioEnabled) {
+        setTimeout(() => {
+          announceCustomerPickup(ticket.orderNumber, ticket.ticketNumber);
+        }, 300);
+      }
+
+      // 3. Hiển thị banner giọng nói trực quan trên màn hình
+      setActiveAnnouncement({
+        text: speechText,
+        orderNumber: ticket.orderNumber,
+        callNumber,
+      });
     }
+  };
+
+  const handleReannounce = (ticket: KitchenTicketDto) => {
+    const callNumber = extractOrderCallNumber(ticket.orderNumber, ticket.ticketNumber);
+    const speechText = buildTtsAnnouncement(ticket.orderNumber, ticket.ticketNumber);
+    playChime();
+    if (audioEnabled) {
+      setTimeout(() => {
+        announceCustomerPickup(ticket.orderNumber, ticket.ticketNumber);
+      }, 300);
+    }
+    setActiveAnnouncement({
+      text: speechText,
+      orderNumber: ticket.orderNumber,
+      callNumber,
+    });
   };
 
   const handleComplete = async (ticket: KitchenTicketDto) => {
@@ -437,11 +518,11 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
               </h1>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Barista Queue
+                Live Touch Barista Queue
               </span>
             </div>
             <p className="text-xs font-medium text-slate-500">
-              Điều phối chế biến đồ uống thời gian thực · Cảnh báo SLA 5 phút · Tự động đồng bộ POS & SignalR
+              Điều phối chế biến đồ uống cảm ứng · SLA 3 phút (Xanh → Vàng → Đỏ) · Giọng nói TTS gọi số trả món
             </p>
           </div>
         </div>
@@ -457,7 +538,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
               onChange={(e) => setSelectedStoreId(e.target.value)}
               className="bg-transparent font-bold text-slate-800 outline-none"
             >
-              {availableStores.map((s) => (
+              {storeOptions.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.code} - {s.name}
                 </option>
@@ -476,10 +557,10 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
                 ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
                 : "border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200"
             }`}
-            title={audioEnabled ? "Tắt âm thanh thông báo" : "Bật âm thanh chuông báo"}
+            title={audioEnabled ? "Tắt âm thanh & giọng nói TTS" : "Bật âm thanh & giọng nói TTS"}
           >
             {audioEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-            {audioEnabled ? "Âm chuông: Bật" : "Âm chuông: Tắt"}
+            {audioEnabled ? "Loa TTS: Bật" : "Loa TTS: Tắt"}
           </button>
 
           {/* Refresh */}
@@ -493,6 +574,47 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
           </button>
         </div>
       </div>
+
+      {/* Real-time Voice Announcement Banner (TTS) */}
+      {activeAnnouncement && (
+        <div className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-red-600 via-amber-600 to-red-600 p-4 text-white shadow-xl animate-bounce-short">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+              <Volume2 size={24} className="animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-md bg-white/25 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider">
+                  Loa Quầy Barista (TTS)
+                </span>
+                <span className="text-xs font-semibold text-white/90">
+                  Khách #{activeAnnouncement.callNumber} ({activeAnnouncement.orderNumber})
+                </span>
+              </div>
+              <p className="text-base font-black tracking-wide mt-0.5">
+                "{activeAnnouncement.text}"
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                playChime();
+                announceCustomerPickup(activeAnnouncement.orderNumber);
+              }}
+              className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-red-700 shadow hover:bg-slate-100"
+            >
+              Gọi lại
+            </button>
+            <button
+              onClick={() => setActiveAnnouncement(null)}
+              className="rounded-xl p-1.5 text-white/80 hover:bg-white/20"
+            >
+              <XCircle size={18} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Metric Counters & View Filter Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -526,7 +648,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
             </span>
           </div>
           <div className="mt-2 text-2xl font-black text-amber-900">{inPrepTickets.length}</div>
-          <div className="mt-0.5 text-[11px] text-amber-600 font-medium">Đang tính giờ SLA</div>
+          <div className="mt-0.5 text-[11px] text-amber-600 font-medium">SLA 3 phút (Xanh→Vàng→Đỏ)</div>
         </div>
 
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 shadow-sm">
@@ -577,7 +699,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
         </div>
 
         <span className="text-xs font-bold text-slate-400">
-          Chạm vào thẻ hoặc topping để tương tác cảm ứng
+          Chạm trực tiếp vào ly hoặc topping để tick hoàn thành
         </span>
       </div>
 
@@ -665,14 +787,14 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
                     </div>
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions: Bắt đầu pha chế (POST /kds/tickets/{id}/start) */}
                   <div className="mt-4 flex items-center gap-2 pt-2 border-t border-slate-100">
                     <button
                       onClick={() => handleStartPrep(ticket)}
                       disabled={submittingAction === `start-${ticket.id}`}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95 transition-transform disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 active:scale-95 transition-transform disabled:opacity-50"
                     >
-                      <Flame size={14} />
+                      <Flame size={15} />
                       Bắt đầu pha chế
                     </button>
                     <button
@@ -689,7 +811,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
           </div>
         )}
 
-        {/* Column 2: Đang pha chế (InPreparation) */}
+        {/* Column 2: Đang pha chế (InPreparation) - Touch SLA 3 phút */}
         {(filterView === "all" || filterView === "prep") && (
           <div className="flex flex-col gap-3 rounded-2xl bg-amber-50/60 p-3.5 border border-amber-100">
             <div className="flex items-center justify-between px-1">
@@ -699,7 +821,7 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
                   2. Đang pha chế ({inPrepTickets.length})
                 </h2>
               </div>
-              <span className="text-[11px] font-semibold text-amber-700">SLA 5 phút</span>
+              <span className="text-[11px] font-semibold text-amber-700">SLA 3 phút</span>
             </div>
 
             {inPrepTickets.length === 0 ? (
@@ -710,22 +832,21 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
               </div>
             ) : (
               inPrepTickets.map((ticket) => {
-                const isOverSla = ticket.elapsedSeconds > ticket.targetPreparationSeconds;
-                const isWarningSla = ticket.elapsedSeconds > 180 && !isOverSla;
+                const slaInfo = calculateKdsSlaCountdown(
+                  ticket.preparationStartedAt,
+                  ticket.targetPreparationSeconds || 180,
+                  nowMs
+                );
+                const allPrepared = ticket.items.length > 0 && ticket.items.every((i) => i.isPrepared);
+                const preparedCount = ticket.items.filter((i) => i.isPrepared).length;
 
                 return (
                   <div
                     key={ticket.id}
-                    className={`flex flex-col justify-between rounded-xl bg-white p-4 shadow-sm transition-all border-2 ${
-                      isOverSla
-                        ? "border-red-500 shadow-red-500/10"
-                        : isWarningSla
-                        ? "border-amber-400 shadow-amber-400/10"
-                        : "border-slate-200 hover:border-amber-300"
-                    }`}
+                    className={`flex flex-col justify-between rounded-xl bg-white p-4 shadow-sm transition-all border-2 ${slaInfo.cardBorderClass}`}
                   >
                     <div className="space-y-3">
-                      {/* Ticket Header & Live SLA Clock */}
+                      {/* Ticket Header & Live SLA Clock (Xanh -> Vàng -> Đỏ nếu trễ quá 3 phút) */}
                       <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
                         <div>
                           <div className="flex items-center gap-2">
@@ -736,63 +857,68 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
                               #{ticket.orderNumber}
                             </span>
                           </div>
-                          <span className="text-[11px] font-medium text-slate-400">
-                            {ticket.orderType === "DineIn"
-                              ? "Tại bàn"
-                              : ticket.orderType === "TakeAway"
-                              ? "Mang đi"
-                              : "Giao hàng"}
-                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] font-medium text-slate-400">
+                              {ticket.orderType === "DineIn"
+                                ? "Tại bàn"
+                                : ticket.orderType === "TakeAway"
+                                ? "Mang đi"
+                                : "Giao hàng"}
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-500">
+                              · Tiến độ: {preparedCount}/{ticket.items.length} ly
+                            </span>
+                          </div>
                         </div>
 
-                        {/* SLA Stopwatch Pill */}
+                        {/* SLA Countdown Stopwatch Pill */}
                         <div
-                          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-black ${
-                            isOverSla
-                              ? "bg-red-100 text-red-700 animate-pulse"
-                              : isWarningSla
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-emerald-100 text-emerald-800"
-                          }`}
+                          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-black border ${slaInfo.badgeClass}`}
+                          title={`Chuẩn SLA 3 phút (180s). Trạng thái: ${slaInfo.stage}`}
                         >
                           <Timer size={13} />
-                          {formatTimer(ticket.elapsedSeconds)} / 05:00
+                          <span>{slaInfo.label}</span>
                         </div>
                       </div>
 
-                      {/* Items & Checklist */}
+                      {/* Items & Checklist - Chạm trực tiếp vào dòng món hoặc Topping */}
                       <div className="space-y-2.5">
                         {ticket.items.map((item) => (
                           <div
                             key={item.id}
-                            className={`rounded-xl p-3 transition-colors ${
+                            onClick={() => handleToggleItem(ticket.id, item.id)}
+                            className={`cursor-pointer rounded-xl p-3 select-none active:scale-[0.99] transition-all border ${
                               item.isPrepared
-                                ? "bg-emerald-50/70 border border-emerald-200"
-                                : "bg-slate-50 border border-slate-100"
+                                ? "bg-emerald-50/80 border-emerald-300 shadow-sm shadow-emerald-500/10"
+                                : "bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60"
                             }`}
                           >
                             <div className="flex items-center justify-between">
-                              <button
-                                onClick={() => handleToggleItem(ticket.id, item.id)}
-                                className="flex items-center gap-2 text-left"
-                              >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                 <div
-                                  className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs transition-colors ${
+                                  className={`flex h-6 w-6 items-center justify-center rounded-lg border-2 text-xs transition-all ${
                                     item.isPrepared
-                                      ? "border-emerald-600 bg-emerald-600 text-white"
-                                      : "border-slate-300 bg-white"
+                                      ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                                      : "border-slate-400 bg-white shadow-inner"
                                   }`}
                                 >
-                                  {item.isPrepared && <Check size={13} strokeWidth={3} />}
+                                  {item.isPrepared ? <Check size={16} strokeWidth={3} /> : null}
                                 </div>
-                                <span
-                                  className={`text-xs font-black ${
-                                    item.isPrepared ? "line-through text-slate-400" : "text-slate-900"
-                                  }`}
-                                >
-                                  {item.quantity}x {item.productName}
+                                <div className="min-w-0 flex-1">
+                                  <span
+                                    className={`text-xs font-black transition-colors ${
+                                      item.isPrepared ? "line-through text-slate-400" : "text-slate-900"
+                                    }`}
+                                  >
+                                    {item.quantity}x {item.productName}
+                                  </span>
+                                </div>
+                              </div>
+                              {item.isPrepared && (
+                                <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-800 border border-emerald-200">
+                                  ✓ Đã xong
                                 </span>
-                              </button>
+                              )}
                             </div>
 
                             {item.specialNote && (
@@ -801,25 +927,31 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
                               </div>
                             )}
 
-                            {/* Modifiers / Toppings Checklist (Touch to toggle) */}
+                            {/* Toppings / Modifiers Checklist (Chạm riêng biệt để tick) */}
                             {item.modifiers.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1.5">
                                 {item.modifiers.map((mod) => (
                                   <button
                                     key={mod.id}
-                                    onClick={() => handleToggleModifier(ticket.id, mod.id)}
-                                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-extrabold transition-colors border ${
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // Không kích hoạt toggle dòng đồ uống cha
+                                      handleToggleModifier(ticket.id, mod.id);
+                                    }}
+                                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition-all border active:scale-95 ${
                                       mod.isChecked
-                                        ? "border-emerald-300 bg-emerald-100 text-emerald-800"
-                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                        ? "border-emerald-400 bg-emerald-100 text-emerald-900 shadow-sm"
+                                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
                                     }`}
                                   >
                                     <div
-                                      className={`h-2 w-2 rounded-full ${
-                                        mod.isChecked ? "bg-emerald-600" : "bg-slate-300"
+                                      className={`flex h-3.5 w-3.5 items-center justify-center rounded-full ${
+                                        mod.isChecked ? "bg-emerald-600 text-white" : "bg-slate-200"
                                       }`}
-                                    />
-                                    {mod.modifierName}
+                                    >
+                                      {mod.isChecked ? <Check size={10} strokeWidth={3} /> : null}
+                                    </div>
+                                    <span>+{mod.modifierName}</span>
                                   </button>
                                 ))}
                               </div>
@@ -827,17 +959,30 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
                           </div>
                         ))}
                       </div>
+
+                      {/* 100% Prepared Badge */}
+                      {allPrepared && (
+                        <div className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-800 border border-emerald-300 animate-pulse">
+                          <Sparkles size={14} className="text-emerald-600" />
+                          100% Ly Đã Xong - Sẵn Sàng Trả Khách!
+                        </div>
+                      )}
                     </div>
 
-                    {/* Actions: Mark Ready */}
+                    {/* Actions: Nút "Hoàn thành / Trả món" (POST /kds/tickets/{id}/ready) + Phát TTS */}
                     <div className="mt-4 flex items-center gap-2 pt-2 border-t border-slate-100">
                       <button
                         onClick={() => handleMarkReady(ticket)}
                         disabled={submittingAction === `ready-${ticket.id}`}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-black text-white shadow-sm shadow-amber-500/20 hover:bg-amber-700 active:scale-95 transition-transform disabled:opacity-50"
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black text-white active:scale-95 transition-all disabled:opacity-50 ${
+                          allPrepared
+                            ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400"
+                            : "bg-amber-600 hover:bg-amber-700 shadow-sm shadow-amber-500/20"
+                        }`}
                       >
-                        <CheckCircle2 size={15} />
-                        Pha chế xong (Chuông báo)
+                        <CheckCircle2 size={16} />
+                        <span>Hoàn thành / Trả món</span>
+                        <span className="text-[10px] font-normal opacity-90">(Gọi loa TTS)</span>
                       </button>
                       <button
                         onClick={() => setCancelModalTicket(ticket)}
@@ -917,8 +1062,16 @@ export function KdsScreen({ currentUser }: KdsScreenProps) {
                     </div>
                   </div>
 
-                  {/* Actions: Complete */}
-                  <div className="mt-4 pt-2 border-t border-slate-100">
+                  {/* Actions: Re-announce TTS & Complete */}
+                  <div className="mt-4 pt-2 border-t border-slate-100 space-y-2">
+                    <button
+                      onClick={() => handleReannounce(ticket)}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 active:scale-95 transition-all shadow-sm"
+                    >
+                      <Volume2 size={15} />
+                      <span>Gọi lại số (TTS): "Mời quý khách số {extractOrderCallNumber(ticket.orderNumber, ticket.ticketNumber)}..."</span>
+                    </button>
+
                     <button
                       onClick={() => handleComplete(ticket)}
                       disabled={submittingAction === `complete-${ticket.id}`}
