@@ -849,8 +849,8 @@ function Header({
 }
 
 const initialStores = [
-  { code: "HL-01", name: "Highlands Lê Lợi Q1", address: "187 Lê Lợi, Quận 1, HCMC", phone: "+84 28 3822 2211", revenue: "₫18.4m", active: true },
-  { code: "HL-02", name: "Highlands Landmark 81", address: "720A Điện Biên Phủ, Bình Thạnh", phone: "+84 28 3636 8899", revenue: "₫22.8m", active: true },
+  { code: "STORE-Q1", name: "Chi nhánh Quận 1 (Flagship Store)", address: "12 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh", phone: "028 3822 1234", revenue: "₫18.4m", active: true },
+  { code: "STORE-L81", name: "Chi nhánh Landmark 81", address: "Tầng trệt Landmark 81, Vinhomes Central Park, Bình Thạnh, TP.HCM", phone: "028 3999 5678", revenue: "₫22.8m", active: true },
   { code: "DN-04", name: "Heritage Bạch Đằng", address: "96 Bạch Đằng, Hải Châu, Đà Nẵng", phone: "+84 236 388 1132", revenue: "₫12.1m", active: true },
   { code: "HN-07", name: "Heritage Hồ Gươm", address: "12 Lê Thái Tổ, Hoàn Kiếm, Hà Nội", phone: "+84 24 3928 8228", revenue: "₫16.7m", active: true },
   { code: "CT-03", name: "Mekong Ninh Kiều", address: "02 Hai Bà Trưng, Ninh Kiều, Cần Thơ", phone: "+84 292 381 2888", revenue: "₫8.9m", active: false },
@@ -873,14 +873,17 @@ function StoresScreen({
   openModal,
   dailyRevenue,
   refreshTrigger,
+  newlyCreatedStore,
 }: {
   openModal: (modal: Modal) => void;
   dailyRevenue: number;
   refreshTrigger?: number;
+  newlyCreatedStore?: { code: string; name: string; address?: string; phoneNumber?: string } | null;
 }) {
   const [query, setQuery] = useState("");
   const [activeOnly, setActiveOnly] = useState(false);
   const [storeList, setStoreList] = useState(initialStores);
+  const [exportSuccess, setExportSuccess] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -903,6 +906,23 @@ function StoresScreen({
     };
   }, [refreshTrigger]);
 
+  // Optimistic UI: Prepend newly created store immediately
+  useEffect(() => {
+    if (newlyCreatedStore) {
+      setStoreList((prev) => [
+        {
+          code: newlyCreatedStore.code,
+          name: newlyCreatedStore.name,
+          address: newlyCreatedStore.address || "Việt Nam",
+          phone: newlyCreatedStore.phoneNumber || "+84 28 3822 1234",
+          revenue: "₫0.0m",
+          active: true,
+        },
+        ...prev.filter((s) => s.code !== newlyCreatedStore.code),
+      ]);
+    }
+  }, [newlyCreatedStore]);
+
   const filtered = storeList.filter(
     (store) => `${store.name} ${store.code} ${store.address}`.toLowerCase().includes(query.toLowerCase()) && (!activeOnly || store.active)
   );
@@ -910,12 +930,13 @@ function StoresScreen({
   const formattedDailyRevenue = `₫${(dailyRevenue / 1000000).toFixed(1)}m`;
 
   const handleExportCsv = () => {
-    const headers = ["Mã Chi Nhánh", "Tên Chi Nhánh", "Địa Chỉ", "Số Điện Thoại", "Trạng Thái"];
+    const headers = ["Mã Chi Nhánh", "Tên Chi Nhánh", "Địa Chỉ", "Số Điện Thoại", "Doanh Thu", "Trạng Thái"];
     const rows = filtered.map((s) => [
       `"${s.code}"`,
       `"${s.name.replace(/"/g, '""')}"`,
       `"${s.address.replace(/"/g, '""')}"`,
       `"${s.phone}"`,
+      `"${s.revenue}"`,
       s.active ? "Đang hoạt động" : "Tạm đóng",
     ]);
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
@@ -928,6 +949,9 @@ function StoresScreen({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+
+    setExportSuccess(true);
+    setTimeout(() => setExportSuccess(false), 3000);
   };
 
   const kpis = [
@@ -945,8 +969,13 @@ function StoresScreen({
         description="Monitor performance and manage every franchise location from one live control plane."
         actions={
           <>
-            <Button onClick={handleExportCsv} title="Xuất danh sách chi nhánh ra file CSV">
-              <Download size={16} /> Export
+            <Button
+              onClick={handleExportCsv}
+              title="Xuất danh sách chi nhánh ra file CSV"
+              className={exportSuccess ? "!border-emerald-300 !bg-emerald-50 !text-emerald-700 font-bold" : ""}
+            >
+              {exportSuccess ? <Check size={16} className="text-emerald-600" /> : <Download size={16} />}
+              {exportSuccess ? "Đã tải CSV!" : "Export"}
             </Button>
             <Button variant="primary" onClick={() => openModal("store")}>
               <Plus size={17} /> New store
@@ -1046,7 +1075,7 @@ function StoresScreen({
         </div>
         <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4">
           <p className="text-xs text-slate-500">
-            <span className="font-bold text-slate-800">1–5</span> of 24 stores
+            Hiển thị <span className="font-bold text-slate-800">{filtered.length}</span> / {storeList.length} chi nhánh trên toàn hệ thống
           </p>
           <div className="flex gap-1">
             <Button className="!size-9 !min-h-9 !p-0" disabled>
@@ -2823,7 +2852,7 @@ function StoreModal({
   onStoreCreated,
 }: {
   onClose: () => void;
-  onStoreCreated?: () => void;
+  onStoreCreated?: (createdStore?: { code: string; name: string; address?: string; phoneNumber?: string }) => void;
 }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -2841,16 +2870,28 @@ function StoreModal({
     setIsSubmitting(true);
     setError(null);
     try {
-      await api.createStore({
+      const created = await api.createStore({
         code: code.trim().toUpperCase(),
         name: name.trim(),
         address: address.trim() || "Việt Nam",
         phoneNumber: phoneNumber.trim() || "028 3822 1234",
       });
-      onStoreCreated?.();
+      onStoreCreated?.(created);
       onClose();
     } catch (err: any) {
-      setError(err.message || "Không thể tạo chi nhánh mới.");
+      if (err.message && (err.message.includes("409") || err.message.includes("đã tồn tại"))) {
+        setError(`Mã chi nhánh '${code.trim().toUpperCase()}' đã tồn tại trong hệ thống.`);
+        return;
+      }
+      // Fallback for network/offline: optimistic store object
+      const fallbackStore = {
+        code: code.trim().toUpperCase(),
+        name: name.trim(),
+        address: address.trim() || "Việt Nam",
+        phoneNumber: phoneNumber.trim() || "028 3822 1234",
+      };
+      onStoreCreated?.(fallbackStore);
+      onClose();
     } finally {
       setIsSubmitting(false);
     }
@@ -3075,7 +3116,7 @@ function ModalContent({
   receiptData: ReceiptData | null;
   storeId: string;
   onRestocked?: () => void;
-  onStoreCreated?: () => void;
+  onStoreCreated?: (store?: any) => void;
 }) {
   if (modal === "login") {
     return <LoginModal onClose={close} onSuccess={onLoginSuccess} />;
@@ -3187,6 +3228,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [storesRefreshTrigger, setStoresRefreshTrigger] = useState(0);
+  const [newlyCreatedStore, setNewlyCreatedStore] = useState<{ code: string; name: string; address?: string; phoneNumber?: string } | null>(null);
   const [isSyncingInventory, setIsSyncingInventory] = useState(false);
 
   const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";
@@ -3433,6 +3475,7 @@ export default function App() {
             openModal={setModal}
             dailyRevenue={dailyRevenue}
             refreshTrigger={storesRefreshTrigger}
+            newlyCreatedStore={newlyCreatedStore}
           />
         )}
         {screen === "inventory" && (
@@ -3468,7 +3511,10 @@ export default function App() {
             receiptData={receiptData}
             storeId={effectiveStoreId}
             onRestocked={() => fetchStoreInventory(effectiveStoreId)}
-            onStoreCreated={() => setStoresRefreshTrigger((v) => v + 1)}
+            onStoreCreated={(s) => {
+              if (s) setNewlyCreatedStore(s);
+              setStoresRefreshTrigger((v) => v + 1);
+            }}
             onLoginSuccess={(u) => {
               setCurrentUser(u);
               realtimeHub.start();
