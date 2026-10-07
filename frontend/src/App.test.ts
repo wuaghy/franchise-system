@@ -236,6 +236,28 @@ describe('Franchise Frontend Enterprise Suite', () => {
     const markedAll = notifications.map(n => ({ ...n, isRead: true }));
     assert.equal(markedAll.filter(n => !n.isRead).length, 0);
   });
+
+  it('correctly maps screens to role-based portals (Customer, Staff, Admin, Landing)', () => {
+    type Screen = "landing" | "customer" | "stores" | "inventory" | "transfers" | "bom-studio" | "pos" | "kds" | "analytics";
+    type Portal = "landing" | "customer" | "staff" | "admin";
+
+    const getPortalForScreen = (s: Screen): Portal => {
+      if (s === "landing") return "landing";
+      if (s === "customer") return "customer";
+      if (s === "pos" || s === "kds" || s === "transfers") return "staff";
+      return "admin";
+    };
+
+    assert.equal(getPortalForScreen("landing"), "landing");
+    assert.equal(getPortalForScreen("customer"), "customer");
+    assert.equal(getPortalForScreen("pos"), "staff");
+    assert.equal(getPortalForScreen("kds"), "staff");
+    assert.equal(getPortalForScreen("transfers"), "staff");
+    assert.equal(getPortalForScreen("stores"), "admin");
+    assert.equal(getPortalForScreen("analytics"), "admin");
+    assert.equal(getPortalForScreen("bom-studio"), "admin");
+    assert.equal(getPortalForScreen("inventory"), "admin");
+  });
 });
 
 

@@ -147,6 +147,15 @@ function Panel({ children, className = "" }: { children: ReactNode; className?: 
   return <section className={`rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] ${className}`}>{children}</section>;
 }
 
+export type Portal = "landing" | "customer" | "staff" | "admin";
+
+export function getPortalForScreen(s: Screen): Portal {
+  if (s === "landing") return "landing";
+  if (s === "customer") return "customer";
+  if (s === "pos" || s === "kds" || s === "transfers") return "staff";
+  return "admin"; // stores, inventory, bom-studio, analytics
+}
+
 const navItems = [
   { id: "landing" as Screen, label: "Tổng Quan", sub: "Cổng phân quyền", icon: Sparkles },
   { id: "customer" as Screen, label: "Khách Đặt Món", sub: "Menu & VietQR", icon: ShoppingBag },
@@ -158,6 +167,254 @@ const navItems = [
   { id: "inventory" as Screen, label: "Live Inventory", sub: "Kho & BoM", icon: Box },
   { id: "analytics" as Screen, label: "Business Intelligence", sub: "Báo cáo & Phí HQ", icon: BarChart3 },
 ];
+
+const staffNavItems = [
+  { id: "pos" as Screen, label: "POS Terminal", sub: "Thu ngân bán hàng", icon: LayoutGrid },
+  { id: "kds" as Screen, label: "Kitchen KDS", sub: "Barista & Bếp", icon: Coffee },
+  { id: "transfers" as Screen, label: "Kho & STO", sub: "Điều chuyển hàng", icon: Truck },
+];
+
+const adminNavItems = [
+  { id: "stores" as Screen, label: "Mạng Lưới Chi Nhánh", sub: "Quản lý cửa hàng", icon: Building2 },
+  { id: "analytics" as Screen, label: "Báo Cáo & Phí HQ", sub: "Doanh thu & Royalty", icon: BarChart3 },
+  { id: "bom-studio" as Screen, label: "BoM Studio", sub: "Định mức & COGS", icon: Calculator },
+  { id: "inventory" as Screen, label: "Tồn Kho Toàn Chuỗi", sub: "Ledger", icon: Box },
+];
+
+function ShiftUserButton({
+  currentUser,
+  openLogin,
+  onLogout,
+  label = "Nhận ca POS",
+  tone = "amber",
+}: {
+  currentUser: User | null;
+  openLogin: () => void;
+  onLogout: () => void;
+  label?: string;
+  tone?: "amber" | "red" | "dark";
+}) {
+  if (currentUser) {
+    return (
+      <div className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-2xs">
+        <span
+          className={`grid size-7 shrink-0 place-items-center rounded-lg ${
+            tone === "amber" ? "bg-amber-700" : "bg-red-800"
+          } text-[11px] font-black text-white`}
+        >
+          {currentUser.username.slice(0, 2).toUpperCase()}
+        </span>
+        <div className="hidden sm:block text-left">
+          <span className="block max-w-24 truncate text-xs font-black text-slate-900 leading-tight">
+            {currentUser.fullName || currentUser.username}
+          </span>
+          <span
+            className={`block text-[9px] font-extrabold uppercase tracking-wider ${
+              tone === "amber" ? "text-amber-700" : "text-red-700"
+            } leading-none`}
+          >
+            {currentUser.role}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          title="Hết ca / Đăng xuất"
+          className="ml-0.5 rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition shrink-0"
+        >
+          <LogOut size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  const bgClasses =
+    tone === "amber"
+      ? "bg-red-800 hover:bg-red-700 text-white shadow-md shadow-red-900/15"
+      : tone === "red"
+      ? "bg-red-800 hover:bg-red-700 text-white shadow-md shadow-red-900/15"
+      : "bg-slate-900 hover:bg-slate-800 text-white shadow-sm";
+
+  return (
+    <button
+      type="button"
+      onClick={openLogin}
+      className={`shrink-0 whitespace-nowrap inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition active:scale-95 ${bgClasses}`}
+      title={label}
+    >
+      <Lock size={13} className="shrink-0" />
+      <span className="whitespace-nowrap font-bold">{label}</span>
+    </button>
+  );
+}
+
+function NotificationCenter({
+  notifications,
+  unreadCount,
+  isNotifOpen,
+  setIsNotifOpen,
+  audioSettings,
+  onToggleSound,
+  onToggleSpeech,
+  onTestSound,
+  onSimulateOrder,
+  onClearNotifications,
+  onMarkAllRead,
+}: {
+  notifications: SystemNotification[];
+  unreadCount: number;
+  isNotifOpen: boolean;
+  setIsNotifOpen: (open: boolean) => void;
+  audioSettings: AudioSettings;
+  onToggleSound: () => void;
+  onToggleSpeech: () => void;
+  onTestSound: () => void;
+  onSimulateOrder: () => void;
+  onClearNotifications: () => void;
+  onMarkAllRead: () => void;
+}) {
+  return (
+    <div className="relative shrink-0">
+      <Button
+        variant="ghost"
+        onClick={() => setIsNotifOpen(!isNotifOpen)}
+        className="relative !size-10 !min-h-10 !p-0"
+        aria-label="Notifications"
+      >
+        {audioSettings.soundEnabled ? (
+          <Bell size={18} className={unreadCount > 0 ? "text-red-700" : "text-slate-600"} />
+        ) : (
+          <BellOff size={18} className="text-slate-400" />
+        )}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 grid min-w-4.5 h-4.5 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white ring-2 ring-white shadow-xs">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </Button>
+
+      <AnimatePresence>
+        {isNotifOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+            transition={{ duration: 0.16 }}
+            className="absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="grid size-7 place-items-center rounded-lg bg-red-50 text-red-700">
+                  <Bell size={15} />
+                </span>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900">Chuông báo & Đơn hàng</h4>
+                  <p className="text-[10px] text-slate-400 font-semibold">{unreadCount} thông báo chưa xem</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={onMarkAllRead}
+                    className="rounded-lg px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    Đã đọc
+                  </button>
+                )}
+                {notifications.length > 0 && (
+                  <button
+                    onClick={onClearNotifications}
+                    className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                    title="Xóa danh sách"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Audio Controls Box */}
+            <div className="my-3 rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                  {audioSettings.soundEnabled ? <Volume2 size={14} className="text-emerald-600" /> : <VolumeX size={14} className="text-slate-400" />}
+                  <span>Chuông POS (Web Audio)</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={onTestSound}
+                    className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95"
+                    title="Phát thử âm thanh Ting-Ting"
+                  >
+                    Thử chuông
+                  </button>
+                  <button
+                    onClick={onToggleSound}
+                    className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold transition ${
+                      audioSettings.soundEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {audioSettings.soundEnabled ? "BẬT" : "TẮT"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-slate-200/50 pt-2 text-[11px]">
+                <span className="text-[10px] text-slate-500 font-medium">Giọng đọc đơn AI (TTS):</span>
+                <button
+                  onClick={onToggleSpeech}
+                  className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition ${
+                    audioSettings.speechEnabled ? "bg-red-100 text-red-800" : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {audioSettings.speechEnabled ? "BẬT" : "TẮT"}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={onSimulateOrder}
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-800/10 hover:bg-red-800/15 py-1.5 text-[11px] font-extrabold text-red-900 transition active:scale-98"
+              >
+                <Zap size={13} className="text-red-700" />
+                <span>Giả lập đơn Online (Reng chuông)</span>
+              </button>
+            </div>
+
+            {/* Notification List */}
+            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-0.5">
+              {notifications.length === 0 ? (
+                <div className="py-6 text-center text-[11px] text-slate-400">
+                  Chưa có thông báo nào
+                </div>
+              ) : (
+                notifications.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`flex items-start gap-2.5 rounded-xl p-2.5 transition text-left ${
+                      item.isRead ? "bg-slate-50/50 text-slate-600" : "bg-red-50/40 border border-red-100/70 text-slate-900"
+                    }`}
+                  >
+                    <span className={`grid size-6 shrink-0 place-items-center rounded-md text-[10px] font-black ${
+                      item.type === "order" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {item.type === "order" ? "₫" : "!"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black truncate">{item.title}</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{item.detail}</p>
+                      <span className="text-[9px] font-bold text-slate-400">{item.time}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 function Header({
   screen,
@@ -198,234 +455,358 @@ function Header({
 }) {
   const badgeTone = connectionStatus === "Connected" ? "success" : connectionStatus === "Reconnecting" ? "warning" : "neutral";
   const badgeText = connectionStatus === "Connected" ? "Outbox Synced" : connectionStatus === "Reconnecting" ? "Reconnecting..." : "Offline";
+  const portal = getPortalForScreen(screen);
 
-  return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-3 px-4 lg:px-6">
-        <button onClick={() => setScreen("landing")} className="flex shrink-0 items-center gap-3 rounded-xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-red-700">
-          <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-red-700 to-red-950 text-lg font-black text-white shadow-lg shadow-red-900/20">F</span>
-          <span className="hidden xl:block">
-            <span className="block text-sm font-black tracking-tight text-slate-950">FRANCHISE</span>
-            <span className="block text-[9px] font-extrabold tracking-[0.2em] text-red-700">ENTERPRISE</span>
-          </span>
-        </button>
-        <nav className="mx-auto hidden items-center rounded-2xl bg-slate-100 p-1 lg:flex" aria-label="Primary navigation">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setScreen(item.id)}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                  screen === item.id ? "bg-white text-red-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Icon size={15} /> <span>{item.label}</span>
-                <span className="hidden 2xl:inline text-slate-400">· {item.sub}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div className="ml-auto flex items-center gap-2">
-          {currentUser ? (
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm">
-              <span className="grid size-7 place-items-center rounded-lg bg-red-800 text-[11px] font-black text-white">
-                {currentUser.username.slice(0, 2).toUpperCase()}
+  // 1. CỔNG KHÁCH HÀNG (CUSTOMER PORTAL) - Tinh giản, chỉ phục vụ thực khách
+  if (portal === "customer") {
+    return (
+      <header className="sticky top-0 z-40 border-b border-rose-100 bg-white/95 backdrop-blur-xl shadow-2xs">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-3 sm:px-4 lg:px-6">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setScreen("landing")}
+              className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition p-1.5 rounded-xl hover:bg-slate-100 shrink-0"
+              title="Quay lại Trang Chủ"
+            >
+              <ChevronLeft size={18} />
+              <span className="hidden sm:inline text-xs font-bold whitespace-nowrap">Trang chủ</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-red-700 to-rose-900 text-base font-black text-white shadow-md shadow-red-900/20 shrink-0">
+                ☕
               </span>
-              <div className="hidden sm:block text-left">
-                <span className="block max-w-28 truncate text-xs font-black text-slate-900 leading-tight">
-                  {currentUser.fullName || currentUser.username}
-                </span>
-                <span className="block text-[9px] font-extrabold uppercase tracking-wider text-red-700 leading-none">
-                  {currentUser.role}
-                </span>
+              <div>
+                <span className="block text-sm font-black tracking-tight text-slate-950 whitespace-nowrap">Highlands Coffee</span>
+                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-rose-700 whitespace-nowrap">Cổng Đặt Món Khách Hàng</span>
               </div>
-              <button
-                type="button"
-                onClick={onLogout}
-                title="Hết ca / Đăng xuất"
-                className="ml-1 rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
-              >
-                <LogOut size={15} />
-              </button>
             </div>
-          ) : (
-            <Button
-              variant="primary"
-              onClick={openLogin}
-              className="!h-9 !min-h-9 !px-3 text-xs shadow-md shadow-red-900/10"
-            >
-              <Lock size={14} /> <span className="hidden sm:inline">Nhận ca POS</span>
-            </Button>
-          )}
-
-          {/* Bell & Announcement Center */}
-          <div className="relative">
-            <Button
-              variant="ghost"
-              onClick={() => setIsNotifOpen(!isNotifOpen)}
-              className="relative !size-10 !min-h-10 !p-0"
-              aria-label="Notifications"
-            >
-              {audioSettings.soundEnabled ? (
-                <Bell size={18} className={unreadCount > 0 ? "text-red-700" : "text-slate-600"} />
-              ) : (
-                <BellOff size={18} className="text-slate-400" />
-              )}
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 grid min-w-4.5 h-4.5 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white ring-2 ring-white shadow-xs">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Button>
-
-            <AnimatePresence>
-              {isNotifOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                  transition={{ duration: 0.16 }}
-                  className="absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
-                >
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="grid size-7 place-items-center rounded-lg bg-red-50 text-red-700">
-                        <Bell size={15} />
-                      </span>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-900">Chuông báo & Đơn hàng</h4>
-                        <p className="text-[10px] text-slate-400 font-semibold">{unreadCount} thông báo chưa xem</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={onMarkAllRead}
-                          className="rounded-lg px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100 transition"
-                        >
-                          Đã đọc
-                        </button>
-                      )}
-                      {notifications.length > 0 && (
-                        <button
-                          onClick={onClearNotifications}
-                          className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
-                          title="Xóa danh sách"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Audio Controls Box */}
-                  <div className="my-3 rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
-                        {audioSettings.soundEnabled ? <Volume2 size={14} className="text-emerald-600" /> : <VolumeX size={14} className="text-slate-400" />}
-                        <span>Chuông POS (Web Audio)</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={onTestSound}
-                          className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95"
-                          title="Phát thử âm thanh Ting-Ting"
-                        >
-                          Thử chuông
-                        </button>
-                        <button
-                          onClick={onToggleSound}
-                          className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold transition ${
-                            audioSettings.soundEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
-                          }`}
-                        >
-                          {audioSettings.soundEnabled ? "BẬT" : "TẮT"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-slate-200/50 pt-2 text-[11px]">
-                      <span className="text-[10px] text-slate-500 font-medium">Giọng đọc đơn AI (TTS):</span>
-                      <button
-                        onClick={onToggleSpeech}
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition ${
-                          audioSettings.speechEnabled ? "bg-red-100 text-red-800" : "bg-slate-200 text-slate-600"
-                        }`}
-                      >
-                        {audioSettings.speechEnabled ? "BẬT" : "TẮT"}
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={onSimulateOrder}
-                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-800/10 hover:bg-red-800/15 py-1.5 text-[11px] font-extrabold text-red-900 transition active:scale-98"
-                    >
-                      <Zap size={13} className="text-red-700" />
-                      <span>Giả lập đơn Online (Reng chuông)</span>
-                    </button>
-                  </div>
-
-                  {/* Notification List */}
-                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-0.5">
-                    {notifications.length === 0 ? (
-                      <div className="py-6 text-center text-[11px] text-slate-400">
-                        Chưa có thông báo nào
-                      </div>
-                    ) : (
-                      notifications.map((item) => (
-                        <div
-                          key={item.id}
-                          className={`flex items-start gap-2.5 rounded-xl p-2.5 transition text-left ${
-                            item.isRead ? "bg-slate-50/50 text-slate-600" : "bg-red-50/40 border border-red-100/70 text-slate-900"
-                          }`}
-                        >
-                          <span className={`grid size-6 shrink-0 place-items-center rounded-md text-[10px] font-black ${
-                            item.type === "order" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                          }`}>
-                            {item.type === "order" ? "₫" : "!"}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-black truncate">{item.title}</p>
-                            <p className="text-[11px] text-slate-500 font-medium">{item.detail}</p>
-                            <span className="text-[9px] font-bold text-slate-400">{item.time}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
-          <button className="hidden items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm md:flex">
-            <span className="grid size-8 place-items-center rounded-lg bg-red-50 text-red-800">
-              <Store size={16} />
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 rounded-xl bg-rose-50/80 border border-rose-100 px-3 py-1.5 text-xs shrink-0">
+              <MapPin size={13} className="text-rose-700 shrink-0" />
+              <span className="font-bold text-slate-800 whitespace-nowrap">Bàn 05 · Highlands Lê Lợi Q1</span>
+            </div>
+
+            <button
+              onClick={() => setScreen("pos")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95 whitespace-nowrap shrink-0"
+            >
+              <LayoutGrid size={13} className="text-slate-500 shrink-0" />
+              <span className="hidden md:inline">Cổng Cửa Hàng (POS)</span>
+              <span className="md:hidden">Cổng POS</span>
+            </button>
+            <button
+              onClick={() => setScreen("analytics")}
+              className="hidden lg:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition active:scale-95 whitespace-nowrap shrink-0"
+            >
+              <Building2 size={13} className="text-slate-500 shrink-0" />
+              <span>Cổng Trụ Sở HQ</span>
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  // 2. CỔNG CỬA HÀNG / NHÂN VIÊN (STAFF PORTAL: POS, KDS, TRANSFERS)
+  if (portal === "staff") {
+    return (
+      <header className="sticky top-0 z-40 border-b border-amber-200/80 bg-white/95 backdrop-blur-xl shadow-2xs">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-2 sm:gap-4 px-3 sm:px-4 lg:px-6">
+          {/* Logo & Badge */}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => setScreen("landing")}
+              className="flex items-center gap-2 text-left focus:outline-none shrink-0"
+              title="Quay về Trang Chủ"
+            >
+              <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-red-700 to-amber-700 text-base font-black text-white shadow-md shadow-amber-800/20 shrink-0">
+                🏪
+              </span>
+              <div className="hidden xl:block">
+                <span className="block text-sm font-black tracking-tight text-slate-950 whitespace-nowrap">FRANCHISE STORE</span>
+                <span className="block text-[9px] font-extrabold uppercase tracking-widest text-amber-700 whitespace-nowrap">Cổng Ca Nhân Viên</span>
+              </div>
+            </button>
+            <span className="rounded-lg bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900 tracking-wide shrink-0">
+              Staff
             </span>
-            <span>
-              <span className="block max-w-40 truncate text-xs font-bold text-slate-800">Highlands Lê Lợi Q1</span>
-              <span className="block font-mono text-[10px] text-slate-400">HL-01 · Flagship</span>
-            </span>
-            <ChevronDown size={14} className="text-slate-400" />
+          </div>
+
+          {/* 3 Staff Navigation Tabs */}
+          <nav className="hidden lg:flex items-center rounded-2xl bg-slate-100/90 p-1 mx-auto" aria-label="Staff navigation">
+            {staffNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = screen === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setScreen(item.id)}
+                  className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+                    isActive ? "bg-white text-red-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon size={14} className={isActive ? "text-red-700" : "text-slate-400"} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Right Actions Toolbar */}
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Quick Switch to HQ Admin */}
+            <button
+              onClick={() => setScreen("analytics")}
+              className="hidden md:inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition whitespace-nowrap shrink-0"
+              title="Chuyển sang Cổng Quản Trị HQ"
+            >
+              <Building2 size={13} className="text-slate-400 shrink-0" />
+              <span>Sang Cổng HQ</span>
+            </button>
+
+            {/* Quick Link to Customer Menu */}
+            <button
+              onClick={() => setScreen("customer")}
+              className="hidden 2xl:inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition whitespace-nowrap shrink-0"
+              title="Xem Menu Đặt Món Khách"
+            >
+              <ShoppingBag size={13} className="text-slate-400 shrink-0" />
+              <span>Menu Khách</span>
+            </button>
+
+            {/* Nhận ca POS button (Fixed: Never wraps text!) */}
+            <ShiftUserButton
+              currentUser={currentUser}
+              openLogin={openLogin}
+              onLogout={onLogout}
+              label="Nhận ca POS"
+              tone="amber"
+            />
+
+            {/* Notification Bell */}
+            <NotificationCenter
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isNotifOpen={isNotifOpen}
+              setIsNotifOpen={setIsNotifOpen}
+              audioSettings={audioSettings}
+              onToggleSound={onToggleSound}
+              onToggleSpeech={onToggleSpeech}
+              onTestSound={onTestSound}
+              onSimulateOrder={onSimulateOrder}
+              onClearNotifications={onClearNotifications}
+              onMarkAllRead={onMarkAllRead}
+            />
+
+            {/* Store Name Badge */}
+            <div className="hidden xl:flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-2xs shrink-0">
+              <Store size={14} className="text-amber-700 shrink-0" />
+              <span className="text-xs font-bold text-slate-800 whitespace-nowrap">Highlands Lê Lợi Q1</span>
+            </div>
+
+            {/* Connection Badge */}
+            <Badge tone={badgeTone} pulse={connectionStatus === "Connected" || connectionStatus === "Reconnecting"}>
+              <span className="hidden sm:inline whitespace-nowrap">{badgeText}</span>
+              <span className="sm:hidden">{connectionStatus === "Connected" ? "Live" : "Off"}</span>
+            </Badge>
+          </div>
+        </div>
+
+        {/* Mobile Navigation for Staff */}
+        <nav className="flex lg:hidden overflow-x-auto border-t border-slate-100 px-2 py-1.5 gap-1" aria-label="Staff mobile nav">
+          {staffNavItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setScreen(item.id)}
+              className={`whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                screen === item.id ? "bg-amber-100 text-amber-900" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setScreen("analytics")}
+            className="ml-auto whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 shrink-0"
+          >
+            Sang Cổng HQ →
           </button>
+        </nav>
+      </header>
+    );
+  }
+
+  // 3. CỔNG TRỤ SỞ QUẢN TRỊ (HQ ADMIN PORTAL: STORES, ANALYTICS, BOM-STUDIO, INVENTORY)
+  if (portal === "admin") {
+    return (
+      <header className="sticky top-0 z-40 border-b border-red-200/80 bg-white/95 backdrop-blur-xl shadow-2xs">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-2 sm:gap-4 px-3 sm:px-4 lg:px-6">
+          {/* Logo & Badge */}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => setScreen("landing")}
+              className="flex items-center gap-2 text-left focus:outline-none shrink-0"
+              title="Quay về Trang Chủ"
+            >
+              <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-red-700 to-red-950 text-base font-black text-white shadow-md shadow-red-900/20 shrink-0">
+                🏢
+              </span>
+              <div className="hidden xl:block">
+                <span className="block text-sm font-black tracking-tight text-slate-950 whitespace-nowrap">FRANCHISE HQ</span>
+                <span className="block text-[9px] font-extrabold uppercase tracking-widest text-red-700 whitespace-nowrap">Trụ Sở Quản Trị</span>
+              </div>
+            </button>
+            <span className="rounded-lg bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase text-red-900 tracking-wide shrink-0">
+              HQ Admin
+            </span>
+          </div>
+
+          {/* 4 Admin Navigation Tabs */}
+          <nav className="hidden lg:flex items-center rounded-2xl bg-slate-100/90 p-1 mx-auto" aria-label="HQ Admin navigation">
+            {adminNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = screen === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setScreen(item.id)}
+                  className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+                    isActive ? "bg-white text-red-950 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon size={14} className={isActive ? "text-red-700" : "text-slate-400"} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Right Actions Toolbar */}
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Quick Switch to Store POS */}
+            <button
+              onClick={() => setScreen("pos")}
+              className="hidden md:inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition whitespace-nowrap shrink-0"
+              title="Chuyển sang Quầy Thu Ngân Cửa Hàng"
+            >
+              <LayoutGrid size={13} className="text-slate-400 shrink-0" />
+              <span>Sang Cổng Cửa Hàng</span>
+            </button>
+
+            {/* Admin User Button */}
+            <ShiftUserButton
+              currentUser={currentUser}
+              openLogin={openLogin}
+              onLogout={onLogout}
+              label="Đăng nhập HQ"
+              tone="red"
+            />
+
+            {/* Notification Bell */}
+            <NotificationCenter
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isNotifOpen={isNotifOpen}
+              setIsNotifOpen={setIsNotifOpen}
+              audioSettings={audioSettings}
+              onToggleSound={onToggleSound}
+              onToggleSpeech={onToggleSpeech}
+              onTestSound={onTestSound}
+              onSimulateOrder={onSimulateOrder}
+              onClearNotifications={onClearNotifications}
+              onMarkAllRead={onMarkAllRead}
+            />
+
+            {/* Connection Badge */}
+            <Badge tone={badgeTone} pulse={connectionStatus === "Connected" || connectionStatus === "Reconnecting"}>
+              <span className="hidden sm:inline whitespace-nowrap">{badgeText}</span>
+              <span className="sm:hidden">{connectionStatus === "Connected" ? "Live" : "Off"}</span>
+            </Badge>
+          </div>
+        </div>
+
+        {/* Mobile Navigation for Admin */}
+        <nav className="flex lg:hidden overflow-x-auto border-t border-slate-100 px-2 py-1.5 gap-1" aria-label="Admin mobile nav">
+          {adminNavItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setScreen(item.id)}
+              className={`whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                screen === item.id ? "bg-red-100 text-red-900" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setScreen("pos")}
+            className="ml-auto whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 shrink-0"
+          >
+            Sang Cổng POS →
+          </button>
+        </nav>
+      </header>
+    );
+  }
+
+  // 4. TRANG CHỦ TỔNG QUAN (LANDING PORTAL) - Cổng chọn vai trò
+  return (
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl shadow-2xs">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-3 sm:px-4 lg:px-6">
+        {/* Brand */}
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-red-700 to-red-950 text-lg font-black text-white shadow-md shadow-red-900/20 shrink-0">
+            F
+          </span>
+          <div>
+            <span className="block text-sm font-black tracking-tight text-slate-950 whitespace-nowrap">FRANCHISE ENTERPRISE</span>
+            <span className="block text-[9px] font-extrabold uppercase tracking-widest text-red-700 whitespace-nowrap">Cổng Điều Hành Chuỗi F&B</span>
+          </div>
+        </div>
+
+        {/* 3 Portal Links */}
+        <nav className="hidden md:flex items-center gap-1 rounded-2xl bg-slate-100 p-1 mx-auto" aria-label="Landing Portals">
+          <button
+            onClick={() => setScreen("customer")}
+            className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-white hover:text-slate-950 transition whitespace-nowrap shrink-0"
+          >
+            <ShoppingBag size={14} className="text-rose-600 shrink-0" />
+            <span>1. Khách Đặt Món</span>
+          </button>
+          <button
+            onClick={() => setScreen("pos")}
+            className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-white hover:text-slate-950 transition whitespace-nowrap shrink-0"
+          >
+            <LayoutGrid size={14} className="text-amber-600 shrink-0" />
+            <span>2. Cửa Hàng (POS & KDS)</span>
+          </button>
+          <button
+            onClick={() => setScreen("analytics")}
+            className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-white hover:text-slate-950 transition whitespace-nowrap shrink-0"
+          >
+            <Building2 size={14} className="text-red-700 shrink-0" />
+            <span>3. Quản Trị Trụ Sở HQ</span>
+          </button>
+        </nav>
+
+        {/* Right Login & Status */}
+        <div className="flex items-center gap-2 shrink-0">
+          <ShiftUserButton
+            currentUser={currentUser}
+            openLogin={openLogin}
+            onLogout={onLogout}
+            label="Đăng nhập"
+            tone="dark"
+          />
+
           <Badge tone={badgeTone} pulse={connectionStatus === "Connected" || connectionStatus === "Reconnecting"}>
-            <span className="hidden sm:inline">{badgeText}</span>
-            <span className="sm:hidden">{connectionStatus === "Connected" ? "Live" : "Offline"}</span>
+            <span className="hidden sm:inline whitespace-nowrap">{badgeText}</span>
+            <span className="sm:hidden">{connectionStatus === "Connected" ? "Live" : "Off"}</span>
           </Badge>
         </div>
       </div>
-      <nav className="flex overflow-x-auto border-t border-slate-100 px-3 py-2 lg:hidden" aria-label="Mobile navigation">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setScreen(item.id)}
-            className={`min-w-max rounded-lg px-3 py-1.5 text-xs font-bold ${screen === item.id ? "bg-red-50 text-red-800" : "text-slate-500"}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
     </header>
   );
 }
@@ -2383,7 +2764,7 @@ export default function App() {
   const title = useMemo(() => navItems.find((item) => item.id === screen)?.label, [screen]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-slate-50 text-slate-900">
       <a href="#main-content" className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white focus:translate-y-0">
         Skip to content
       </a>
@@ -2409,7 +2790,7 @@ export default function App() {
         onClearNotifications={handleClearNotifications}
         onMarkAllRead={handleMarkAllRead}
       />
-      <div id="main-content" aria-label={title}>
+      <div id="main-content" aria-label={title} className="w-full max-w-[100vw] overflow-x-hidden">
         {screen === "landing" && <LandingScreen onNavigate={(s) => setScreen(s)} openLogin={() => setModal("login")} />}
         {screen === "customer" && <CustomerScreen />}
         {screen === "stores" && <StoresScreen openModal={setModal} dailyRevenue={dailyRevenue} />}
