@@ -2728,7 +2728,7 @@ function LoginModal({
                 </span>
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={() => quickLogin("admin", "Admin123!")}
@@ -2736,6 +2736,14 @@ function LoginModal({
                 >
                   <span className="text-[10px] font-black text-red-800">HQ Admin</span>
                   <span className="font-mono text-[9px] text-slate-400">admin</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => quickLogin("supply_chain", "Supply123!")}
+                  className="flex flex-col items-center rounded-xl border border-slate-200 p-2 text-center transition hover:border-purple-400 hover:bg-purple-50"
+                >
+                  <span className="text-[10px] font-black text-purple-800">Supply Chain</span>
+                  <span className="font-mono text-[9px] text-slate-400">supply_chain</span>
                 </button>
                 <button
                   type="button"
@@ -3487,7 +3495,12 @@ export default function App() {
             isSyncing={isSyncingInventory}
           />
         )}
-        {screen === "transfers" && <TransfersHubScreen currentUser={currentUser} />}
+        {screen === "transfers" && (
+          <TransfersHubScreen
+            currentUser={currentUser}
+            onSwitchUser={setCurrentUser}
+          />
+        )}
         {screen === "bom-studio" && <BomStudioScreen />}
         {screen === "pos" && (
           <PosScreen

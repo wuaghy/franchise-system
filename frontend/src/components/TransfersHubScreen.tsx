@@ -206,7 +206,12 @@ const initialMockWhInventory: WarehouseInventoryDto[] = [
   },
 ];
 
-export function TransfersHubScreen({ currentUser }: { currentUser: User | null }) {
+export interface TransfersHubScreenProps {
+  currentUser: User | null;
+  onSwitchUser?: (user: User | null) => void;
+}
+
+export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubScreenProps) {
   const [activeTab, setActiveTab] = useState<"transfers" | "warehouse">("transfers");
   const [orders, setOrders] = useState<StockTransferOrderDto[]>(initialMockTransfers);
   const [warehouses, setWarehouses] = useState<WarehouseDto[]>(initialMockWarehouses);

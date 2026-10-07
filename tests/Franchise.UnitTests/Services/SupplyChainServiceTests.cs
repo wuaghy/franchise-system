@@ -372,4 +372,104 @@ public class SupplyChainServiceTests
         tx!.TransactionType.Should().Be(WarehouseTransactionType.SupplierInbound);
         tx.QuantityChange.Should().Be(200);
     }
+
+    [Fact]
+    public async Task ExecuteFullStoLifecycle_ManagerQ1AndSupplyChain_CoffeeTransferLoop_ShouldSucceedAndBalanceCorrectly()
+    {
+        // Kịch bản hoàn chỉnh đa vai trò:
+        // 1. manager_q1 tạo đơn đề xuất xin 20kg cà phê Arabica từ kho tổng -> Trình duyệt (Submitted)
+        // 2. supply_chain duyệt đơn 20kg (Approved) -> Xuất kho kèm mã vận đơn VNPost (Dispatched) -> Khấu trừ kho tổng
+        // 3. manager_q1 nghiệm thu nhận hàng (Received) -> Tự động cộng tồn kho chi nhánh Q1
+
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var (warehouse, store, coffee, _) = await SeedDataAsync(context);
+        var service = new SupplyChainService(context);
+
+        var managerQ1UserId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var supplyChainUserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
+        // Đặt số lượng tồn kho thực tế ban đầu:
+        // Kho tổng: 1,500,000 gram (1,500 kg)
+        var whCoffee = await context.WarehouseInventories.FirstAsync(wi => wi.WarehouseId == warehouse.Id && wi.IngredientId == coffee.Id);
+        whCoffee.CurrentStock = 1500000;
+
+        // Chi nhánh Q1: 14,250 gram (14.25 kg)
+        context.StoreInventories.Add(new StoreInventory
+        {
+            StoreId = store.Id,
+            IngredientId = coffee.Id,
+            CurrentStock = 14250,
+            MinAlertThreshold = 5000,
+            LastCountedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+
+        // 20kg cà phê = 20,000 gram
+        const decimal requestedCoffeeQty = 20000;
+
+        // BƯỚC 1: manager_q1 Tạo đơn đề xuất (Draft)
+        var createRequest = new CreateTransferOrderRequest(
+            warehouse.Id,
+            store.Id,
+            "Chi nhánh Q1 đề xuất xin cấp 20kg cà phê từ kho tổng cho tuần cao điểm",
+            new List<CreateTransferItemRequest>
+            {
+                new(coffee.Id, requestedCoffeeQty, "Cà phê hạt pha máy Arabica")
+            }
+        );
+        var draftOrder = await service.CreateTransferOrderAsync(createRequest, managerQ1UserId);
+        draftOrder.Status.Should().Be("Draft");
+        draftOrder.CreatedByUserId.Should().Be(managerQ1UserId);
+
+        // BƯỚC 1 (tiếp): manager_q1 Trình duyệt đơn lên HQ (Submitted)
+        var submittedOrder = await service.SubmitTransferOrderAsync(draftOrder.Id, managerQ1UserId);
+        submittedOrder.Status.Should().Be("Submitted");
+
+        // BƯỚC 2: supply_chain Duyệt đơn (Approved)
+        var approveRequest = new ApproveTransferOrderRequest(new List<ApproveTransferItemDto>
+        {
+            new(coffee.Id, requestedCoffeeQty)
+        }, "HQ Supply Chain phê duyệt xuất kho đúng 20kg cà phê");
+        var approvedOrder = await service.ApproveTransferOrderAsync(submittedOrder.Id, approveRequest, supplyChainUserId);
+        approvedOrder.Status.Should().Be("Approved");
+        approvedOrder.ApprovedByUserId.Should().Be(supplyChainUserId);
+
+        // BƯỚC 2 (tiếp): supply_chain Xuất kho kèm mã vận đơn VNPost (Dispatched)
+        var dispatchRequest = new DispatchTransferOrderRequest("VNPOST-8839210", "Giao qua bưu điện VNPost Express xe số SG-8291");
+        var dispatchedOrder = await service.DispatchTransferOrderAsync(approvedOrder.Id, dispatchRequest, supplyChainUserId);
+        dispatchedOrder.Status.Should().Be("Dispatched");
+        dispatchedOrder.DispatchTrackingNumber.Should().Be("VNPOST-8839210");
+
+        // Kiểm tra tồn kho kho tổng bị khấu trừ chính xác: 1,500,000 - 20,000 = 1,480,000 gram
+        var whCoffeeAfter = await context.WarehouseInventories.FirstAsync(wi => wi.WarehouseId == warehouse.Id && wi.IngredientId == coffee.Id);
+        whCoffeeAfter.CurrentStock.Should().Be(1480000);
+
+        // Kiểm tra sổ cái giao dịch xuất kho tổng
+        var whTx = await context.WarehouseInventoryTransactions.FirstOrDefaultAsync(t => t.WarehouseId == warehouse.Id && t.ReferenceNumber == dispatchedOrder.TransferCode);
+        whTx.Should().NotBeNull();
+        whTx!.QuantityChange.Should().Be(-requestedCoffeeQty);
+        whTx.BalanceAfter.Should().Be(1480000);
+        whTx.TransactionType.Should().Be(WarehouseTransactionType.TransferDispatch);
+
+        // BƯỚC 3: manager_q1 Nghiệm thu nhận hàng tại Chi nhánh Q1 (Received)
+        var receiveRequest = new ReceiveTransferOrderRequest(new List<ReceiveTransferItemDto>
+        {
+            new(coffee.Id, requestedCoffeeQty, "Hàng nhận đủ 20kg bao bì nguyên vẹn")
+        }, "Đã cân kiểm tra tại quầy, đủ 20kg cà phê");
+        var receivedOrder = await service.ReceiveTransferOrderAsync(dispatchedOrder.Id, receiveRequest, managerQ1UserId);
+        receivedOrder.Status.Should().Be("Received");
+        receivedOrder.DiscrepancyNotes.Should().Be("Đã cân kiểm tra tại quầy, đủ 20kg cà phê");
+
+        // Tồn kho chi nhánh Q1 được tự động cộng thêm: 14,250 + 20,000 = 34,250 gram
+        var storeCoffeeAfter = await context.StoreInventories.FirstAsync(si => si.StoreId == store.Id && si.IngredientId == coffee.Id);
+        storeCoffeeAfter.CurrentStock.Should().Be(34250);
+
+        // Kiểm tra sổ cái giao dịch nhập hàng chi nhánh Q1
+        var storeTx = await context.InventoryTransactions.FirstOrDefaultAsync(t => t.StoreId == store.Id && t.TransactionType == InventoryTransactionType.Inbound_HQ);
+        storeTx.Should().NotBeNull();
+        storeTx!.QuantityChange.Should().Be(requestedCoffeeQty);
+        storeTx.BalanceAfter.Should().Be(34250);
+        storeTx.Note.Should().Contain(dispatchedOrder.TransferCode);
+    }
 }

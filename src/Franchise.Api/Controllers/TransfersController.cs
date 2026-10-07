@@ -1,5 +1,6 @@
 using Franchise.Application.Common.Interfaces;
 using Franchise.Application.DTOs.SupplyChain;
+using Franchise.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -58,10 +59,20 @@ public class TransfersController : ControllerBase
     /// Tạo mới một đơn đề xuất điều chuyển hàng (Trạng thái Draft)
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "HQ_SuperAdmin,Store_Manager,Supply_Chain_Officer")]
     [ProducesResponseType(typeof(StockTransferOrderDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateTransferOrder([FromBody] CreateTransferOrderRequest request, CancellationToken ct)
     {
+        // Nếu là Store Manager thì đảm bảo DestinationStoreId là chi nhánh của mình
+        if (!_currentUserService.IsSuperAdmin && _currentUserService.Role != "Supply_Chain_Officer")
+        {
+            if (_currentUserService.StoreId.HasValue)
+            {
+                request = request with { DestinationStoreId = _currentUserService.StoreId.Value };
+            }
+        }
+
         var userId = _currentUserService.UserId ?? Guid.NewGuid();
         var result = await _supplyChainService.CreateTransferOrderAsync(request, userId, ct);
         return CreatedAtAction(nameof(GetTransferOrderById), new { id = result.Id }, result);
@@ -71,6 +82,7 @@ public class TransfersController : ControllerBase
     /// Cập nhật nội dung đơn điều chuyển (chỉ áp dụng cho đơn đang ở trạng thái Draft)
     /// </summary>
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "HQ_SuperAdmin,Store_Manager,Supply_Chain_Officer")]
     [ProducesResponseType(typeof(StockTransferOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateTransferOrder(Guid id, [FromBody] UpdateTransferOrderRequest request, CancellationToken ct)
@@ -84,6 +96,7 @@ public class TransfersController : ControllerBase
     /// Trình duyệt đơn lên HQ (Draft -> Submitted)
     /// </summary>
     [HttpPost("{id:guid}/submit")]
+    [Authorize(Roles = "HQ_SuperAdmin,Store_Manager,Supply_Chain_Officer")]
     [ProducesResponseType(typeof(StockTransferOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SubmitTransferOrder(Guid id, CancellationToken ct)
