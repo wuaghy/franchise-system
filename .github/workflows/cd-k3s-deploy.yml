@@ -1,14 +1,11 @@
 name: CD K3s Deploy
 on:
-  # Tạm thời tắt auto-trigger từ cloud runner vì K3s đang ở localhost:
-  # workflow_run:
-  #   workflows: ["CD Docker Publish"]
-  #   types:
-  #     - completed
-  #   branches:
-  #     - main
-
-  # Giữ lại trigger chạy bằng tay khi cần:
+  workflow_run:
+    workflows: ["CD Docker Publish"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       image_tag:
