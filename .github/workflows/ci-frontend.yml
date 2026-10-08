@@ -42,12 +42,15 @@ jobs:
 
             # bước 3: install dependencies
             - name: Install dependencies
-              run: npm ci --prefix frontend
+              working-directory: frontend
+              run: npm ci
 
             # bước 4: run tests 
             - name: Run automated tests
-              run: npm test --prefix frontend -- --passWithNoTests
+              working-directory: frontend
+              run: npm test
 
             # bước 5: build the frontend project
             - name: Build frontend
-              run: npm run build --prefix frontend
+              working-directory: frontend
+              run: npm run build
