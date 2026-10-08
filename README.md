@@ -3,6 +3,7 @@
 [![CI Backend](https://github.com/wuaghy/franchise-system/actions/workflows/ci-backend.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/ci-backend.yml)
 [![CI Frontend](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml)
 [![Docker CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml)
+[![K3s Deploy CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml)
 [![Tests](https://img.shields.io/badge/Automated_Tests-121_Backend_+_22_Frontend_Passing-brightgreen?logo=checkmarx&logoColor=white)](https://github.com/wuaghy/franchise-system/actions)
 
 [![Backend Platform](https://img.shields.io/badge/.NET_8-ASP.NET_Core_Web_API-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
