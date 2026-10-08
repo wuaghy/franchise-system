@@ -49,95 +49,35 @@ const defaultStores: AnalyticsStoreOption[] = [
   { id: "33333333-3333-3333-3333-333333333333", name: "Chi nhánh Landmark 81", code: "STORE-L81" },
 ];
 
-// Fallback initial data for presentation if offline
-const initialMockSummary: FinancialSummaryDto = {
-  storeId: "22222222-2222-2222-2222-222222222222",
-  storeName: "Highlands Lê Lợi Q1",
+const initialEmptySummary: FinancialSummaryDto = {
+  storeId: "",
+  storeName: "",
   fromDate: new Date(Date.now() - 30 * 86400 * 1000).toISOString(),
   toDate: new Date().toISOString(),
-  totalOrders: 1420,
-  grossRevenue: 124500000,
-  discountAmount: 8500000,
-  vatAmount: 9280000,
-  netRevenue: 125280000,
-  averageOrderValue: 88225,
-  estimatedCogs: 39840000,
-  estimatedGrossProfit: 85440000,
-  grossMarginPercentage: 68.2,
+  totalOrders: 0,
+  grossRevenue: 0,
+  discountAmount: 0,
+  vatAmount: 0,
+  netRevenue: 0,
+  averageOrderValue: 0,
+  estimatedCogs: 0,
+  estimatedGrossProfit: 0,
+  grossMarginPercentage: 0,
 };
 
-const initialMockHeatmap: HourlySalesHeatmapDto = {
-  storeId: "22222222-2222-2222-2222-222222222222",
-  storeName: "Highlands Lê Lợi Q1",
+const initialEmptyHeatmap: HourlySalesHeatmapDto = {
+  storeId: "",
+  storeName: "",
   date: new Date().toISOString(),
-  totalOrders: 248,
-  totalRevenue: 21850000,
-  hourlyDistribution: Array.from({ length: 24 }, (_, h) => {
-    const isPeak = [7, 8, 9, 12, 13, 19, 20, 21].includes(h);
-    const count = isPeak ? Math.floor(Math.random() * 15 + 18) : Math.floor(Math.random() * 6 + 1);
-    const rev = count * 88000;
-    return { hour: h, orderCount: count, revenue: rev, isPeakHour: isPeak };
-  }),
+  totalOrders: 0,
+  totalRevenue: 0,
+  hourlyDistribution: Array.from({ length: 24 }, (_, h) => ({
+    hour: h,
+    orderCount: 0,
+    revenue: 0,
+    isPeakHour: false,
+  })),
 };
-
-const initialMockProducts: ProductSalesRankDto[] = [
-  { productId: "p-01", productName: "Phin Sữa Đá Đậm Đà", sku: "CF-01", unitsSold: 420, revenue: 16800000, estimatedCogs: 4872000, estimatedGrossProfit: 11928000, marginPercentage: 71.0, revenueSharePercentage: 28.5 },
-  { productId: "p-02", productName: "Trà Sen Vàng Kem Cheese", sku: "TEA-01", unitsSold: 310, revenue: 15190000, estimatedCogs: 4557000, estimatedGrossProfit: 10633000, marginPercentage: 70.0, revenueSharePercentage: 25.7 },
-  { productId: "p-03", productName: "Freeze Trà Xanh Thạch", sku: "FRZ-01", unitsSold: 215, revenue: 12685000, estimatedCogs: 4439750, estimatedGrossProfit: 8245250, marginPercentage: 65.0, revenueSharePercentage: 21.5 },
-  { productId: "p-04", productName: "Cà Phê Muối Xứ Huế", sku: "CF-03", unitsSold: 180, revenue: 8100000, estimatedCogs: 2430000, estimatedGrossProfit: 5670000, marginPercentage: 70.0, revenueSharePercentage: 13.7 },
-  { productId: "p-05", productName: "Bánh Mì Que Hải Phòng Cay", sku: "BK-01", unitsSold: 240, revenue: 6000000, estimatedCogs: 2400000, estimatedGrossProfit: 3600000, marginPercentage: 60.0, revenueSharePercentage: 10.6 },
-];
-
-const initialMockInvoices: RoyaltyInvoiceDto[] = [
-  {
-    id: "inv-001",
-    invoiceNumber: "ROY-202610-HL01",
-    storeId: "22222222-2222-2222-2222-222222222222",
-    storeName: "Highlands Lê Lợi Q1",
-    storeCode: "HL-01",
-    billingYear: 2026,
-    billingMonth: 10,
-    status: "Issued",
-    totalOrdersCount: 1420,
-    grossRevenue: 124500000,
-    discountAmount: 8500000,
-    netRevenue: 116000000,
-    royaltyRate: 0.05,
-    royaltyFee: 5800000,
-    marketingFeeRate: 0.02,
-    marketingFee: 2320000,
-    techFee: 2000000,
-    totalDue: 10120000,
-    issuedAt: new Date(Date.now() - 3 * 86400 * 1000).toISOString(),
-    dueDate: new Date(Date.now() + 12 * 86400 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 3 * 86400 * 1000).toISOString(),
-  },
-  {
-    id: "inv-002",
-    invoiceNumber: "ROY-202609-HL01",
-    storeId: "22222222-2222-2222-2222-222222222222",
-    storeName: "Highlands Lê Lợi Q1",
-    storeCode: "HL-01",
-    billingYear: 2026,
-    billingMonth: 9,
-    status: "Paid",
-    totalOrdersCount: 1580,
-    grossRevenue: 138000000,
-    discountAmount: 9000000,
-    netRevenue: 129000000,
-    royaltyRate: 0.05,
-    royaltyFee: 6450000,
-    marketingFeeRate: 0.02,
-    marketingFee: 2580000,
-    techFee: 2000000,
-    totalDue: 11030000,
-    issuedAt: new Date(Date.now() - 33 * 86400 * 1000).toISOString(),
-    dueDate: new Date(Date.now() - 18 * 86400 * 1000).toISOString(),
-    paidAt: new Date(Date.now() - 25 * 86400 * 1000).toISOString(),
-    paymentReference: "VCB-MB-99882211",
-    createdAt: new Date(Date.now() - 33 * 86400 * 1000).toISOString(),
-  },
-];
 
 export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
   const isHQAdmin = !currentUser?.storeId || currentUser?.role === "HQ_SuperAdmin";
@@ -148,10 +88,10 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
   const [dateRange, setDateRange] = useState<"today" | "7d" | "30d">("30d");
   const [activeTab, setActiveTab] = useState<"overview" | "heatmap" | "royalty">("overview");
 
-  const [summary, setSummary] = useState<FinancialSummaryDto>(initialMockSummary);
-  const [heatmap, setHeatmap] = useState<HourlySalesHeatmapDto>(initialMockHeatmap);
-  const [products, setProducts] = useState<ProductSalesRankDto[]>(initialMockProducts);
-  const [invoices, setInvoices] = useState<RoyaltyInvoiceDto[]>(initialMockInvoices);
+  const [summary, setSummary] = useState<FinancialSummaryDto>(initialEmptySummary);
+  const [heatmap, setHeatmap] = useState<HourlySalesHeatmapDto>(initialEmptyHeatmap);
+  const [products, setProducts] = useState<ProductSalesRankDto[]>([]);
+  const [invoices, setInvoices] = useState<RoyaltyInvoiceDto[]>([]);
   const [networkOverview, setNetworkOverview] = useState<NetworkOverviewDto | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -526,7 +466,12 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
             </div>
 
             <div className="space-y-3.5">
-              {products.map((item, idx) => (
+              {products.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400 font-medium">
+                  Chưa có dữ liệu bán hàng cho kỳ này. Dữ liệu sẽ tự động tổng hợp khi có đơn hàng.
+                </div>
+              ) : (
+                products.map((item, idx) => (
                 <div key={item.productId} className="rounded-xl border border-slate-100 bg-slate-50/50 p-3.5 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -559,7 +504,8 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
                     </div>
                   </div>
                 </div>
-              ))}
+              ))
+              )}
             </div>
           </div>
 
@@ -722,7 +668,14 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {invoices.map((inv) => (
+                {invoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-slate-400 text-xs font-medium">
+                      Chưa có hóa đơn phí nhượng quyền nào cho chi nhánh này. Nhấn &quot;Đối Soát &amp; Lập Hóa Đơn Kỳ Mới&quot; để tạo.
+                    </td>
+                  </tr>
+                ) : (
+                  invoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50/70">
                     <td className="py-3.5 font-black text-slate-900">{inv.invoiceNumber}</td>
                     <td className="py-3.5 font-medium text-slate-600">
@@ -792,7 +745,8 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
                       </div>
                     </td>
                   </tr>
-                ))}
+                ))
+                )}
               </tbody>
             </table>
           </div>

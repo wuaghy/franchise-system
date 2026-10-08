@@ -46,6 +46,7 @@ const DB_PRODUCT_MAPPING: Record<string, string> = {
 
 export interface MenuItem {
   id: string;
+  dbId?: string;
   name: string;
   category: "coffee" | "milktea" | "fruit_tea" | "freeze" | "bakery";
   price: number;
@@ -356,6 +357,7 @@ export function CustomerScreen() {
             if (match) {
               return {
                 ...item,
+                dbId: match.id,
                 price: match.basePrice,
                 name: match.name,
               };
@@ -483,7 +485,7 @@ export function CustomerScreen() {
           orderType: orderType === "dine-in" ? 0 : 1,
           paymentMethod: 2, // VietQR Napas
           items: cart.map((c) => ({
-            productId: DB_PRODUCT_MAPPING[c.item.id] || "09ffff04-0f0b-4200-994a-d7decc20d2cc",
+            productId: c.item.dbId || DB_PRODUCT_MAPPING[c.item.id] || "09ffff04-0f0b-4200-994a-d7decc20d2cc",
             quantity: c.quantity,
             specialNote: c.customization
               ? `Size ${c.customization.size}, Đá ${c.customization.ice}, Đường ${c.customization.sugar}${
