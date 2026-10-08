@@ -51,8 +51,13 @@ import {
   Volume2,
   VolumeX,
   Zap,
+  FileCheck,
+  FileText,
+  PenTool,
+  Printer,
+  UserCheck,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { realtimeHub, type ConnectionStatus, type LowStockAlertNotification } from "./services/signalr.ts";
 import { audioNotifier, type AudioSettings } from "./services/audioNotification.ts";
 import {
@@ -96,9 +101,13 @@ import {
   type CheckoutResponse,
   type DeductedIngredient,
   type IngredientItem as ApiIngredientItem,
+  type StoreContractResponse,
+  type CreateStorePayload,
 } from "./services/api.ts";
 import { ReceiptModal, type ReceiptData } from "./components/ReceiptModal.tsx";
 import { VietQrModal } from "./components/VietQrModal.tsx";
+import { FranchiseContractModal } from "./components/FranchiseContractModal.tsx";
+import { SignaturePad } from "./components/SignaturePad.tsx";
 import { reportsService } from "./services/reports.ts";
 
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
@@ -849,10 +858,74 @@ function Header({
   );
 }
 
-const initialStores = [
-  { code: "STORE-Q1", name: "Chi nhánh Quận 1 (Flagship Store)", address: "12 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh", phone: "028 3822 1234", revenue: "₫0.0m", active: true },
-  { code: "STORE-L81", name: "Chi nhánh Landmark 81", address: "Tầng trệt Landmark 81, Vinhomes Central Park, Bình Thạnh, TP.HCM", phone: "028 3999 5678", revenue: "₫0.0m", active: true },
-  { code: "STORE-DN01", name: "Chi nhánh Đà Nẵng", address: "96 Bạch Đằng, Hải Châu, Đà Nẵng", phone: "+84 236 388 1132", revenue: "₫0.0m", active: true },
+export interface StoreDisplayItem {
+  id?: string;
+  code: string;
+  name: string;
+  address: string;
+  phone: string;
+  revenue: string;
+  active: boolean;
+  managerUsername?: string;
+  managerFullName?: string;
+  contract?: StoreContractResponse | null;
+}
+
+const initialStores: StoreDisplayItem[] = [
+  {
+    code: "STORE-Q1",
+    name: "Chi nhánh Quận 1 (Flagship Store)",
+    address: "12 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+    phone: "028 3822 1234",
+    revenue: "₫0.0m",
+    active: true,
+    managerUsername: "admin_q1",
+    managerFullName: "Trần Quản Lý Q1",
+    contract: {
+      id: "contract-q1",
+      contractNumber: "HDNQ-STORE-Q1-20260101",
+      status: "Signed",
+      signerName: "Trần Quản Lý Q1",
+      signerTitle: "Chủ Chi Nhánh Nhượng Quyền",
+      signerIdCard: "079095000001",
+      signedAt: "2026-01-01T08:00:00Z",
+      royaltyRate: 0.05,
+      marketingFeeRate: 0.02,
+      techFeeFixedMonthly: 2000000,
+    },
+  },
+  {
+    code: "STORE-L81",
+    name: "Chi nhánh Landmark 81",
+    address: "Tầng trệt Landmark 81, Vinhomes Central Park, Bình Thạnh, TP.HCM",
+    phone: "028 3999 5678",
+    revenue: "₫0.0m",
+    active: true,
+    managerUsername: "admin_l81",
+    managerFullName: "Lê Văn Landmark",
+    contract: {
+      id: "contract-l81",
+      contractNumber: "HDNQ-STORE-L81-20260102",
+      status: "Signed",
+      signerName: "Lê Văn Landmark",
+      signerTitle: "Giám Đốc Đại Diện",
+      signerIdCard: "079095000002",
+      signedAt: "2026-01-02T09:30:00Z",
+      royaltyRate: 0.05,
+      marketingFeeRate: 0.02,
+      techFeeFixedMonthly: 2000000,
+    },
+  },
+  {
+    code: "STORE-DN01",
+    name: "Chi nhánh Đà Nẵng",
+    address: "96 Bạch Đằng, Hải Châu, Đà Nẵng",
+    phone: "+84 236 388 1132",
+    revenue: "₫0.0m",
+    active: true,
+    managerUsername: "admin_dn01",
+    managerFullName: "Phan Văn Đà Nẵng",
+  },
 ];
 
 function PageHeading({ eyebrow, title, description, actions }: { eyebrow: string; title: string; description: string; actions?: ReactNode }) {
@@ -877,12 +950,22 @@ function StoresScreen({
   openModal: (modal: Modal) => void;
   dailyRevenue: number;
   refreshTrigger?: number;
-  newlyCreatedStore?: { code: string; name: string; address?: string; phoneNumber?: string } | null;
+  newlyCreatedStore?: {
+    id?: string;
+    code: string;
+    name: string;
+    address?: string;
+    phoneNumber?: string;
+    managerUsername?: string;
+    managerFullName?: string;
+    contract?: StoreContractResponse | null;
+  } | null;
 }) {
   const [query, setQuery] = useState("");
   const [activeOnly, setActiveOnly] = useState(false);
-  const [storeList, setStoreList] = useState(initialStores);
+  const [storeList, setStoreList] = useState<StoreDisplayItem[]>(initialStores);
   const [exportSuccess, setExportSuccess] = useState(false);
+  const [selectedContractStore, setSelectedContractStore] = useState<StoreDisplayItem | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -893,19 +976,23 @@ function StoresScreen({
       .then(([res, netOverview]) => {
         if (!isMounted || !res?.items || res.items.length === 0) return;
         const rankings = netOverview?.storeRankings || [];
-        const mapped = res.items.map((s) => {
+        const mapped: StoreDisplayItem[] = res.items.map((s) => {
           const ranking = rankings.find((r) => r.storeId === s.id || r.storeCode === s.code);
           const revValue = ranking ? ranking.netRevenue : 0;
           const formattedRev = revValue > 0
             ? (revValue >= 1000000 ? `₫${(revValue / 1000000).toFixed(1)}m` : `₫${(revValue / 1000).toFixed(0)}k`)
             : "₫0.0m";
           return {
+            id: s.id,
             code: s.code,
             name: s.name,
             address: s.address,
             phone: s.phoneNumber || "+84 28 3822 2211",
             revenue: formattedRev,
             active: s.isActive,
+            managerUsername: s.managerUsername,
+            managerFullName: s.managerFullName,
+            contract: s.contract,
           };
         });
         setStoreList(mapped);
@@ -921,12 +1008,16 @@ function StoresScreen({
     if (newlyCreatedStore) {
       setStoreList((prev) => [
         {
+          id: newlyCreatedStore.id,
           code: newlyCreatedStore.code,
           name: newlyCreatedStore.name,
           address: newlyCreatedStore.address || "Việt Nam",
           phone: newlyCreatedStore.phoneNumber || "+84 28 3822 1234",
           revenue: "₫0.0m",
           active: true,
+          managerUsername: newlyCreatedStore.managerUsername,
+          managerFullName: newlyCreatedStore.managerFullName,
+          contract: newlyCreatedStore.contract,
         },
         ...prev.filter((s) => s.code !== newlyCreatedStore.code),
       ]);
@@ -1036,16 +1127,17 @@ function StoresScreen({
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[950px] text-left text-sm">
             <thead className="bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
               <tr>
-                <th className="px-5 py-3.5">Store code</th>
-                <th className="px-5 py-3.5">Store name</th>
-                <th className="px-5 py-3.5">Location</th>
-                <th className="px-5 py-3.5">Contact</th>
-                <th className="px-5 py-3.5">Today</th>
-                <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
+                <th className="px-5 py-3.5">Mã Chi Nhánh</th>
+                <th className="px-5 py-3.5">Chi Nhánh & Quản Lý</th>
+                <th className="px-5 py-3.5">Địa Điểm</th>
+                <th className="px-5 py-3.5">Liên Hệ</th>
+                <th className="px-5 py-3.5">Hợp Đồng (E-Contract)</th>
+                <th className="px-5 py-3.5">Doanh Thu</th>
+                <th className="px-5 py-3.5">Trạng Thái</th>
+                <th className="px-5 py-3.5 text-right">Chi Tiết HĐ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1054,7 +1146,15 @@ function StoresScreen({
                   <td className="px-5 py-4">
                     <span className="font-mono text-xs font-extrabold text-red-800">{store.code}</span>
                   </td>
-                  <td className="px-5 py-4 font-bold text-slate-800">{store.name}</td>
+                  <td className="px-5 py-4">
+                    <div className="font-bold text-slate-800">{store.name}</div>
+                    {store.managerUsername && (
+                      <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-200/60">
+                        <UserCheck size={11} className="text-blue-600" />
+                        <span>Admin: {store.managerFullName || store.managerUsername} ({store.managerUsername})</span>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-4 text-slate-500">
                     <span className="flex items-center gap-2">
                       <MapPin size={14} className="shrink-0 text-slate-400" />
@@ -1067,6 +1167,27 @@ function StoresScreen({
                       {store.phone}
                     </span>
                   </td>
+                  <td className="px-5 py-4">
+                    {store.contract ? (
+                      <button
+                        onClick={() => setSelectedContractStore(store)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
+                        title="Bấm để xem chi tiết hợp đồng nhượng quyền đã ký"
+                      >
+                        <FileCheck size={13} className="text-emerald-600" />
+                        <span>Đã Ký HĐ</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedContractStore(store)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-100 transition shadow-2xs"
+                        title="Bấm để ký hợp đồng nhượng quyền trực tuyến ngay"
+                      >
+                        <PenTool size={13} className="text-amber-600" />
+                        <span>Ký HĐ Online</span>
+                      </button>
+                    )}
+                  </td>
                   <td className="px-5 py-4 font-mono font-bold text-slate-800">{store.revenue}</td>
                   <td className="px-5 py-4">
                     <Badge tone={store.active ? "success" : "neutral"} pulse={store.active}>
@@ -1074,8 +1195,13 @@ function StoresScreen({
                     </Badge>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <Button variant="ghost" className="!size-9 !min-h-9 !p-0">
-                      <MoreHorizontal size={18} />
+                    <Button
+                      variant="ghost"
+                      onClick={() => setSelectedContractStore(store)}
+                      className="!size-9 !min-h-9 !p-0"
+                      title="Xem và In Hợp Đồng Nhượng Quyền Điện Tử"
+                    >
+                      <FileText size={17} className="text-slate-600" />
                     </Button>
                   </td>
                 </tr>
@@ -1097,6 +1223,25 @@ function StoresScreen({
           </div>
         </div>
       </Panel>
+
+      {/* Franchise Contract E-Sign & View Modal */}
+      {selectedContractStore && (
+        <FranchiseContractModal
+          storeId={selectedContractStore.id}
+          storeCode={selectedContractStore.code}
+          storeName={selectedContractStore.name}
+          storeAddress={selectedContractStore.address}
+          storePhone={selectedContractStore.phone}
+          initialContract={selectedContractStore.contract}
+          onClose={() => setSelectedContractStore(null)}
+          onContractSigned={(signed) => {
+            setStoreList((prev) =>
+              prev.map((s) => (s.code === selectedContractStore.code ? { ...s, contract: signed } : s))
+            );
+            setSelectedContractStore((prev) => (prev ? { ...prev, contract: signed } : null));
+          }}
+        />
+      )}
     </motion.main>
   );
 }
@@ -2845,35 +2990,101 @@ function StoreModal({
   onStoreCreated,
 }: {
   onClose: () => void;
-  onStoreCreated?: (createdStore?: { code: string; name: string; address?: string; phoneNumber?: string }) => void;
+  onStoreCreated?: (createdStore?: any) => void;
 }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+
+  // Store Manager / Admin Account State
+  const [createManager, setCreateManager] = useState(true);
+  const [managerFullName, setManagerFullName] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
+  const [managerUsername, setManagerUsername] = useState("");
+  const [managerPassword, setManagerPassword] = useState("Manager@123");
+
+  // E-Contract Signing State
+  const [signContract, setSignContract] = useState(true);
+  const [signerName, setSignerName] = useState("");
+  const [signerIdCard, setSignerIdCard] = useState("079095012345");
+  const [signerTitle, setSignerTitle] = useState("Chủ Chi Nhánh Nhượng Quyền");
+  const [signatureBase64, setSignatureBase64] = useState("");
+  const [agreedTerms, setAgreedTerms] = useState(true);
+
+  const [activeTab, setActiveTab] = useState<"store" | "manager" | "contract">("store");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleCodeChange = (val: string) => {
+    setCode(val);
+    const clean = val.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!managerUsername || managerUsername.startsWith("mgr_")) {
+      setManagerUsername(clean ? `mgr_${clean}` : "");
+    }
+    if (!managerEmail || managerEmail.includes("@franchise.vn")) {
+      setManagerEmail(clean ? `${clean}@franchise.vn` : "");
+    }
+  };
+
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (!signerName) {
+      setSignerName("Nguyễn Văn Đại Diện");
+    }
+    if (!managerFullName) {
+      setManagerFullName("Nguyễn Văn Quản Lý");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim() || !name.trim()) {
+      setActiveTab("store");
       setError("Mã chi nhánh và Tên chi nhánh là bắt buộc.");
       return;
     }
+    if (createManager && (!managerUsername.trim() || !managerPassword.trim())) {
+      setActiveTab("manager");
+      setError("Vui lòng nhập Tên đăng nhập và Mật khẩu cho tài khoản Quản lý chi nhánh.");
+      return;
+    }
+    if (signContract && (!signerName.trim() || !signatureBase64)) {
+      setActiveTab("contract");
+      setError("Vui lòng điền Họ tên người ký và vẽ chữ ký điện tử vào khung bên dưới.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
-      const created = await api.createStore({
+      const payload: CreateStorePayload = {
         code: code.trim().toUpperCase(),
         name: name.trim(),
         address: address.trim() || "Việt Nam",
         phoneNumber: phoneNumber.trim() || "028 3822 1234",
-      });
+        managerAccount: createManager && managerUsername.trim() ? {
+          fullName: managerFullName.trim() || name.trim() + " Manager",
+          email: managerEmail.trim() || `${code.toLowerCase().trim()}@franchise.vn`,
+          username: managerUsername.trim(),
+          password: managerPassword.trim(),
+        } : undefined,
+        contractSigning: signContract && signerName.trim() && signatureBase64 ? {
+          signerName: signerName.trim(),
+          signerIdCard: signerIdCard.trim() || "079095012345",
+          signerTitle: signerTitle.trim() || "Chủ Chi Nhánh Nhượng Quyền",
+          signatureBase64: signatureBase64,
+          royaltyRate: 0.05,
+          marketingFeeRate: 0.02,
+        } : undefined,
+      };
+
+      const created = await api.createStore(payload);
       onStoreCreated?.(created);
       onClose();
     } catch (err: any) {
       if (err.message && (err.message.includes("409") || err.message.includes("đã tồn tại"))) {
-        setError(`Mã chi nhánh '${code.trim().toUpperCase()}' đã tồn tại trong hệ thống.`);
+        setError(`Mã chi nhánh '${code.trim().toUpperCase()}' hoặc Tên đăng nhập đã tồn tại trong hệ thống.`);
         return;
       }
       // Fallback for network/offline: optimistic store object
@@ -2882,6 +3093,21 @@ function StoreModal({
         name: name.trim(),
         address: address.trim() || "Việt Nam",
         phoneNumber: phoneNumber.trim() || "028 3822 1234",
+        managerUsername: createManager ? managerUsername : undefined,
+        managerFullName: createManager ? managerFullName : undefined,
+        contract: signContract ? {
+          id: "offline-" + Date.now(),
+          contractNumber: `HDNQ-${code.trim().toUpperCase()}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
+          status: "Signed",
+          signerName,
+          signerTitle,
+          signerIdCard,
+          signedAt: new Date().toISOString(),
+          signatureBase64,
+          royaltyRate: 0.05,
+          marketingFeeRate: 0.02,
+          techFeeFixedMonthly: 2000000,
+        } : undefined,
       };
       onStoreCreated?.(fallbackStore);
       onClose();
@@ -2893,58 +3119,318 @@ function StoreModal({
   return (
     <ModalShell side onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex h-full flex-col">
-        <div className="flex items-center justify-between border-b border-slate-200 p-6">
+        {/* Modal Top Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 p-6 bg-slate-50/50">
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-widest text-red-700">Network expansion</p>
-            <h2 className="text-xl font-black text-slate-950">Create franchise store</h2>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-red-700">Mở Rộng Mạng Lưới Chuỗi</p>
+            <h2 className="text-xl font-black text-slate-950">Tạo Chi Nhánh Nhượng Quyền</h2>
           </div>
           <Button variant="ghost" type="button" onClick={onClose} className="!size-10 !p-0">
             <X size={19} />
           </Button>
         </div>
+
+        {/* Navigation Tabs between Sections */}
+        <div className="flex border-b border-slate-200 bg-white px-6 pt-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("store")}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === "store"
+                ? "border-red-600 text-red-700"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Store size={14} />
+            <span>1. Chi Nhánh</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("manager")}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === "manager"
+                ? "border-red-600 text-red-700"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <UserCheck size={14} />
+            <span>2. Quản Lý (Admin)</span>
+            {createManager && <span className="size-1.5 rounded-full bg-emerald-500"></span>}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("contract")}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === "contract"
+                ? "border-red-600 text-red-700"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <FileCheck size={14} />
+            <span>3. Ký Hợp Đồng</span>
+            {signContract && <span className="size-1.5 rounded-full bg-red-500"></span>}
+          </button>
+        </div>
+
+        {/* Tab Contents */}
         <div className="flex-1 space-y-5 p-6 overflow-y-auto">
           {error && (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-700">
-              {error}
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-700 flex items-center gap-2">
+              <AlertTriangle size={16} className="shrink-0" />
+              <span>{error}</span>
             </div>
           )}
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-relaxed text-blue-800">
-            <b>Mã chi nhánh là duy nhất.</b> Hệ thống sẽ tự động gán tài khoản nhượng quyền và kích hoạt trên hệ thống đám mây.
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Store code"
-              placeholder="e.g. HL-25"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-            />
-            <Field
-              label="Phone number"
-              placeholder="+84 28 ..."
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-            />
-          </div>
-          <Field
-            label="Store name"
-            placeholder="Highlands Nguyễn Huệ"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <Field
-            label="Street address"
-            placeholder="Địa chỉ kinh doanh đầy đủ"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
+
+          {/* TAB 1: STORE DETAILS */}
+          {activeTab === "store" && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-relaxed text-blue-800">
+                <b>Mã chi nhánh là duy nhất.</b> Hệ thống tự động kích hoạt điểm bán POS và cổng điều phối kho nội bộ.
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Mã chi nhánh (Code)"
+                  placeholder="ví dụ: HL-25"
+                  value={code}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  required
+                />
+                <Field
+                  label="Số điện thoại"
+                  placeholder="028 3822 1234"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
+              <Field
+                label="Tên chi nhánh"
+                placeholder="Highlands Coffee Nguyễn Huệ"
+                value={name}
+                onChange={(e) => handleNameChange(e.target.value)}
+                required
+              />
+              <Field
+                label="Địa chỉ chi nhánh"
+                placeholder="Số nhà, tên đường, phường, quận/huyện..."
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+
+              <div className="pt-2 flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="text-xs">
+                  <p className="font-bold text-slate-800">Bước tiếp theo:</p>
+                  <p className="text-slate-500">Tạo tài khoản Store Manager và Ký hợp đồng</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("manager")}
+                  className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-800 transition"
+                >
+                  Sang mục Quản lý →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: MANAGER ACCOUNT CREATION */}
+          {activeTab === "manager" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/60 p-3.5">
+                <div>
+                  <p className="text-xs font-bold text-blue-900">Tạo tài khoản Quản lý (Admin) chi nhánh</p>
+                  <p className="text-[11px] text-blue-700">Tự động cấp quyền Store_Manager điều hành POS, Kho và KDS</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createManager}
+                    onChange={(e) => setCreateManager(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+              </div>
+
+              {createManager && (
+                <div className="space-y-4 rounded-2xl border border-slate-200 p-4 bg-white">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Họ và tên Quản lý"
+                      placeholder="Nguyễn Văn Quản Lý"
+                      value={managerFullName}
+                      onChange={(e) => setManagerFullName(e.target.value)}
+                      required
+                    />
+                    <Field
+                      label="Email liên hệ"
+                      placeholder="manager@franchise.vn"
+                      value={managerEmail}
+                      onChange={(e) => setManagerEmail(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Tên đăng nhập (Username)"
+                      placeholder="mgr_hl25"
+                      value={managerUsername}
+                      onChange={(e) => setManagerUsername(e.target.value)}
+                      required
+                    />
+                    <Field
+                      label="Mật khẩu khởi tạo"
+                      type="password"
+                      placeholder="Manager@123"
+                      value={managerPassword}
+                      onChange={(e) => setManagerPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="rounded-xl bg-amber-50 p-3 text-[11px] text-amber-800 border border-amber-200/70">
+                    💡 Tài khoản này có thể đăng nhập ngay sau khi tạo chi nhánh để quản lý đơn POS, nguyên vật liệu và nhận điều chuyển từ HQ.
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("store")}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition"
+                >
+                  ← Quay lại
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("contract")}
+                  className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-800 transition"
+                >
+                  Sang mục Ký hợp đồng →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: E-CONTRACT SIGNING */}
+          {activeTab === "contract" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5">
+                <div>
+                  <p className="text-xs font-bold text-emerald-950">Ký Hợp Đồng Nhượng Quyền Điện Tử (E-Contract)</p>
+                  <p className="text-[11px] text-emerald-800">Thiết lập tỷ lệ phân chia doanh thu và chữ ký số trực tiếp</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={signContract}
+                    onChange={(e) => setSignContract(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              {signContract && (
+                <div className="space-y-4 rounded-2xl border border-slate-200 p-4 bg-white">
+                  {/* Fee Summary Cards */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-red-200 bg-red-50/60 p-2.5 text-center">
+                      <p className="text-[10px] font-extrabold uppercase text-red-700">Royalty</p>
+                      <p className="text-base font-black text-red-950">5.0%</p>
+                      <p className="text-[9px] text-slate-500">Doanh thu net</p>
+                    </div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-2.5 text-center">
+                      <p className="text-[10px] font-extrabold uppercase text-amber-700">Marketing</p>
+                      <p className="text-base font-black text-amber-950">2.0%</p>
+                      <p className="text-[9px] text-slate-500">Quỹ toàn quốc</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-2.5 text-center">
+                      <p className="text-[10px] font-extrabold uppercase text-blue-700">Công nghệ POS</p>
+                      <p className="text-base font-black text-blue-950">₫2.0m</p>
+                      <p className="text-[9px] text-slate-500">Cố định/tháng</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Người đại diện ký kết"
+                      placeholder="Nguyễn Văn Đại Diện"
+                      value={signerName}
+                      onChange={(e) => setSignerName(e.target.value)}
+                      required
+                    />
+                    <Field
+                      label="Số CCCD / Hộ chiếu / MST"
+                      placeholder="079095012345"
+                      value={signerIdCard}
+                      onChange={(e) => setSignerIdCard(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <Field
+                    label="Chức vụ đại diện"
+                    placeholder="Chủ Chi Nhánh Nhượng Quyền"
+                    value={signerTitle}
+                    onChange={(e) => setSignerTitle(e.target.value)}
+                  />
+
+                  {/* HTML5 Canvas Signature Pad */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-700">
+                      Bảng ký điện tử trực tiếp (Chuột hoặc ngón tay cảm ứng) <span className="text-rose-500">*</span>
+                    </label>
+                    <SignaturePad
+                      signerName={signerName}
+                      width={420}
+                      height={140}
+                      onSignatureChange={(b64) => setSignatureBase64(b64)}
+                    />
+                  </div>
+
+                  <label className="flex items-start gap-2 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={agreedTerms}
+                      onChange={(e) => setAgreedTerms(e.target.checked)}
+                      className="mt-0.5 size-4 rounded text-red-700 focus:ring-red-500"
+                    />
+                    <span className="text-[11px] text-slate-600 font-semibold select-none">
+                      Tôi đồng ý với các điều khoản của Hợp đồng Nhượng quyền Thương mại và cam kết tuân thủ chính sách chuỗi.
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-start items-center">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("manager")}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition"
+                >
+                  ← Quay lại Quản lý
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white p-5">
-          <Button type="button" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" type="submit" disabled={isSubmitting}>
-            <Check size={16} /> {isSubmitting ? "Creating..." : "Create store"}
-          </Button>
+
+        {/* Modal Bottom Footer Actions */}
+        <div className="sticky bottom-0 flex justify-between items-center border-t border-slate-200 bg-white p-5">
+          <div className="text-xs text-slate-500">
+            {activeTab === "store" && "Bước 1/3: Thông tin điểm bán"}
+            {activeTab === "manager" && "Bước 2/3: Tài khoản quản lý"}
+            {activeTab === "contract" && "Bước 3/3: Hợp đồng số"}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" onClick={onClose}>Hủy bỏ</Button>
+            <Button variant="primary" type="submit" disabled={isSubmitting}>
+              <Check size={16} /> {isSubmitting ? "Đang xử lý..." : "Tạo & Kích Hoạt Chi Nhánh"}
+            </Button>
+          </div>
         </div>
       </form>
     </ModalShell>
@@ -3221,7 +3707,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [storesRefreshTrigger, setStoresRefreshTrigger] = useState(0);
-  const [newlyCreatedStore, setNewlyCreatedStore] = useState<{ code: string; name: string; address?: string; phoneNumber?: string } | null>(null);
+  const [newlyCreatedStore, setNewlyCreatedStore] = useState<StoreDisplayItem | null>(null);
   const [isSyncingInventory, setIsSyncingInventory] = useState(false);
 
   const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";

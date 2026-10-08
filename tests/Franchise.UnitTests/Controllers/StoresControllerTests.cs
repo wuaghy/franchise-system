@@ -23,9 +23,10 @@ public class StoresControllerTests
         return new AppDbContext(options);
     }
 
-    private StoresController CreateController(AppDbContext context)
+    private StoresController CreateController(AppDbContext context, Franchise.Application.Common.Interfaces.IPasswordHasher? passwordHasher = null)
     {
-        var controller = new StoresController(context)
+        var hasher = passwordHasher ?? new Franchise.Infrastructure.Auth.PasswordHasher();
+        var controller = new StoresController(context, hasher)
         {
             ControllerContext = new ControllerContext
             {
@@ -131,5 +132,63 @@ public class StoresControllerTests
         // Kiểm tra database ảo thực sự đã lưu bản ghi
         var storeInDb = await context.Stores.FirstOrDefaultAsync(s => s.Code == "NEW-STORE-01");
         storeInDb.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task CreateStore_ShouldCreateManagerAccountAndContract_WhenProvidedInRequest()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var controller = CreateController(context);
+
+        var managerAccount = new CreateStoreManagerAccountRequest(
+            FullName: "Nguyễn Văn Quản Lý",
+            Email: "manager.vt@franchise.vn",
+            Username: "manager_vt",
+            Password: "SecurePassword123!"
+        );
+
+        var contractSigning = new OnlineContractSigningRequest(
+            SignerName: "Trần Đối Tác",
+            SignerIdCard: "079201009988",
+            SignerTitle: "Chủ đầu tư chi nhánh",
+            SignatureBase64: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+            RoyaltyRate: 0.05m,
+            MarketingFeeRate: 0.02m
+        );
+
+        var request = new CreateStoreRequest(
+            Code: "STORE-VT01",
+            Name: "Chi nhánh Vũng Tàu Bãi Trước",
+            Address: "12 Hạ Long, TP. Vũng Tàu",
+            PhoneNumber: "0254 382 9999",
+            ManagerAccount: managerAccount,
+            ContractSigning: contractSigning
+        );
+
+        // Act
+        var actionResult = await controller.CreateStore(request);
+
+        // Assert
+        var createdResult = actionResult.Should().BeOfType<CreatedAtActionResult>().Subject;
+        createdResult.StatusCode.Should().Be(201);
+        var response = createdResult.Value.Should().BeOfType<StoreResponse>().Subject;
+
+        response.ManagerUsername.Should().Be("manager_vt");
+        response.ManagerFullName.Should().Be("Nguyễn Văn Quản Lý");
+        response.Contract.Should().NotBeNull();
+        response.Contract!.SignerName.Should().Be("Trần Đối Tác");
+        response.Contract.Status.Should().Be("Signed");
+
+        // Verify Database
+        var userInDb = await context.Users.FirstOrDefaultAsync(u => u.Username == "manager_vt");
+        userInDb.Should().NotBeNull();
+        userInDb!.Role.Should().Be(Franchise.Domain.Enums.UserRole.Store_Manager);
+        userInDb.StoreId.Should().Be(response.Id);
+
+        var contractInDb = await context.FranchiseContracts.FirstOrDefaultAsync(c => c.StoreId == response.Id);
+        contractInDb.Should().NotBeNull();
+        contractInDb!.SignerIdCard.Should().Be("079201009988");
+        contractInDb.RoyaltyRate.Should().Be(0.05m);
     }
 }

@@ -5,6 +5,47 @@
 
 import { getTokenFromLocalStorage } from './auth.ts';
  
+export interface StoreContractResponse {
+  id: string;
+  contractNumber: string;
+  status: string;
+  signerName: string;
+  signerTitle: string;
+  signerIdCard: string;
+  signedAt: string;
+  signatureBase64?: string;
+  royaltyRate: number;
+  marketingFeeRate: number;
+  techFeeFixedMonthly: number;
+}
+
+export interface CreateStoreManagerPayload {
+  fullName: string;
+  email: string;
+  username: string;
+  password?: string;
+}
+
+export interface OnlineContractSigningPayload {
+  signerName: string;
+  signerIdCard: string;
+  signerTitle?: string;
+  signatureBase64: string;
+  royaltyRate?: number;
+  marketingFeeRate?: number;
+}
+
+export interface CreateStorePayload {
+  code: string;
+  name: string;
+  address: string;
+  phoneNumber: string;
+  latitude?: number;
+  longitude?: number;
+  managerAccount?: CreateStoreManagerPayload;
+  contractSigning?: OnlineContractSigningPayload;
+}
+
 export interface StoreItem {
   id: string;
   code: string;
@@ -14,6 +55,9 @@ export interface StoreItem {
   isActive: boolean;
   revenue?: string;
   createdAt: string;
+  managerUsername?: string;
+  managerFullName?: string;
+  contract?: StoreContractResponse;
 }
 
 export interface InventoryItem {
@@ -142,10 +186,21 @@ export const api = {
     return fetchJson<{ items: StoreItem[]; totalCount: number }>(`${API_BASE}/stores?${params.toString()}`);
   },
 
-  async createStore(data: { code: string; name: string; address: string; phoneNumber: string }): Promise<StoreItem> {
+  async createStore(data: CreateStorePayload): Promise<StoreItem> {
     return fetchJson<StoreItem>(`${API_BASE}/stores`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  async getStoreContract(storeId: string): Promise<StoreContractResponse> {
+    return fetchJson<StoreContractResponse>(`${API_BASE}/stores/${storeId}/contract`);
+  },
+
+  async signStoreContract(storeId: string, payload: OnlineContractSigningPayload): Promise<StoreContractResponse> {
+    return fetchJson<StoreContractResponse>(`${API_BASE}/stores/${storeId}/contract/sign`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 

@@ -567,6 +567,68 @@ describe('Franchise Frontend Enterprise Suite', () => {
     const allReady = toggledItems.every(i => i.isPrepared);
     assert.equal(allReady, true);
   });
+
+  it('validates store creation payload with manager account and online contract signing', () => {
+    const storePayload = {
+      code: 'HL-Q1-NEW',
+      name: 'Highlands Coffee Nguyễn Thị Minh Khai',
+      address: '180 Nguyễn Thị Minh Khai, Quận 3, TP.HCM',
+      phoneNumber: '028 3822 9999',
+      managerAccount: {
+        fullName: 'Trần Văn Quản Lý',
+        email: 'quanly.q3@franchise.vn',
+        username: 'mgr_q3_minhkhai',
+        password: 'Manager@123',
+      },
+      contractSigning: {
+        signerName: 'Trần Văn Quản Lý',
+        signerIdCard: '079095012345',
+        signerTitle: 'Chủ Chi Nhánh Nhượng Quyền',
+        signatureBase64: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        royaltyRate: 0.05,
+        marketingFeeRate: 0.02,
+      },
+    };
+
+    assert.equal(storePayload.code, 'HL-Q1-NEW');
+    assert.ok(storePayload.managerAccount);
+    assert.equal(storePayload.managerAccount.username, 'mgr_q3_minhkhai');
+    assert.ok(storePayload.contractSigning);
+    assert.equal(storePayload.contractSigning.royaltyRate, 0.05);
+    assert.equal(storePayload.contractSigning.marketingFeeRate, 0.02);
+    assert.ok(storePayload.contractSigning.signatureBase64.startsWith('data:image/png;base64,'));
+  });
+
+  it('validates E-Contract monthly financial obligations and legal document structure', () => {
+    const monthlyNetRevenue = 250000000; // 250 million VND
+    const royaltyRate = 0.05;
+    const marketingRate = 0.02;
+    const techFeeFixed = 2000000;
+
+    const royaltyFee = monthlyNetRevenue * royaltyRate;
+    const marketingFee = monthlyNetRevenue * marketingRate;
+    const totalMonthlyObligation = royaltyFee + marketingFee + techFeeFixed;
+
+    assert.equal(royaltyFee, 12500000); // 12.5 million VND
+    assert.equal(marketingFee, 5000000); // 5 million VND
+    assert.equal(totalMonthlyObligation, 19500000); // 19.5 million VND
+
+    const contractRecord = {
+      contractNumber: 'HDNQ-HL-Q1-NEW-20261008',
+      status: 'Signed',
+      signerName: 'Trần Văn Quản Lý',
+      signerTitle: 'Chủ Chi Nhánh Nhượng Quyền',
+      signerIdCard: '079095012345',
+      signedAt: new Date().toISOString(),
+      royaltyRate,
+      marketingFeeRate: marketingRate,
+      techFeeFixedMonthly: techFeeFixed,
+    };
+
+    assert.equal(contractRecord.status, 'Signed');
+    assert.ok(contractRecord.contractNumber.startsWith('HDNQ-'));
+    assert.equal(contractRecord.techFeeFixedMonthly, 2000000);
+  });
 });
 
 

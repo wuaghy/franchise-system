@@ -17,6 +17,22 @@ public record StoreQueryParameters
     public bool? IsActive { get; init; }
 }
 
+public record CreateStoreManagerAccountRequest(
+    string FullName,
+    string Email,
+    string Username,
+    string Password
+);
+
+public record OnlineContractSigningRequest(
+    string SignerName,
+    string SignerIdCard,
+    string? SignerTitle,
+    string SignatureBase64,
+    decimal RoyaltyRate = 0.05m,
+    decimal MarketingFeeRate = 0.02m
+);
+
 public record CreateStoreRequest(
     string Code,
     string Name,
@@ -25,7 +41,9 @@ public record CreateStoreRequest(
     decimal? Latitude = null,
     decimal? Longitude = null,
     TimeSpan? OpeningTime = null,
-    TimeSpan? ClosingTime = null
+    TimeSpan? ClosingTime = null,
+    CreateStoreManagerAccountRequest? ManagerAccount = null,
+    OnlineContractSigningRequest? ContractSigning = null
 );
 
 public record UpdateStoreRequest(
@@ -41,6 +59,20 @@ public record UpdateStoreRequest(
 
 public record UpdateStoreStatusRequest(bool IsActive);
 
+public record StoreContractResponse(
+    Guid Id,
+    string ContractNumber,
+    string Status,
+    string SignerName,
+    string SignerTitle,
+    string SignerIdCard,
+    DateTime SignedAt,
+    string? SignatureBase64,
+    decimal RoyaltyRate,
+    decimal MarketingFeeRate,
+    decimal TechFeeFixedMonthly
+);
+
 public record StoreResponse(
     Guid Id,
     string Code,
@@ -48,7 +80,10 @@ public record StoreResponse(
     string Address,
     string PhoneNumber,
     bool IsActive,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? ManagerUsername = null,
+    string? ManagerFullName = null,
+    StoreContractResponse? Contract = null
 );
 
 public record StoreDetailResponse(

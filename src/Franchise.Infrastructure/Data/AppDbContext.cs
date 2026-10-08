@@ -51,6 +51,7 @@ public class AppDbContext : DbContext
     // 7. Phân hệ Tài chính, Báo cáo & Phí Nhượng quyền (Royalty & Financial BI)
     public DbSet<RoyaltyInvoice> RoyaltyInvoices => Set<RoyaltyInvoice>();
     public DbSet<StoreRoyaltySetting> StoreRoyaltySettings => Set<StoreRoyaltySetting>();
+    public DbSet<FranchiseContract> FranchiseContracts => Set<FranchiseContract>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -532,6 +533,25 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.StoreId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<FranchiseContract>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.ContractNumber).IsUnique();
+            b.Property(e => e.ContractNumber).IsRequired().HasMaxLength(100);
+            b.Property(e => e.SignerName).IsRequired().HasMaxLength(200);
+            b.Property(e => e.SignerIdCard).HasMaxLength(50);
+            b.Property(e => e.SignerTitle).HasMaxLength(100);
+            b.Property(e => e.RoyaltyRate).HasPrecision(5, 4);
+            b.Property(e => e.MarketingFeeRate).HasPrecision(5, 4);
+            b.Property(e => e.TechFeeFixedMonthly).HasPrecision(18, 2);
+            b.Property(e => e.Status).HasMaxLength(50);
+
+            b.HasOne(e => e.Store)
+                .WithOne(s => s.Contract)
+                .HasForeignKey<FranchiseContract>(e => e.StoreId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

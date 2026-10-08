@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Franchise.Infrastructure.Data;
 using Franchise.Domain.Entities;
+using Franchise.Domain.Enums;
 using Franchise.Application.DTOs.Stores;
 using Franchise.Application.Common.Models;
+using Franchise.Application.Common.Interfaces;
 
 namespace Franchise.Api.Controllers;
 
@@ -15,10 +17,12 @@ namespace Franchise.Api.Controllers;
 public class StoresController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public StoresController(AppDbContext context)
+    public StoresController(AppDbContext context, IPasswordHasher passwordHasher)
     {
         _context = context;
+        _passwordHasher = passwordHasher;
     }
 
     /// <summary>
@@ -58,6 +62,8 @@ public class StoresController : ControllerBase
             .OrderByDescending(s => s.CreatedAt)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
+            .Include(s => s.Contract)
+            .Include(s => s.Users)
             .Select(s => new StoreResponse(
                 s.Id,
                 s.Code,
@@ -65,7 +71,22 @@ public class StoresController : ControllerBase
                 s.Address,
                 s.PhoneNumber,
                 s.IsActive,
-                s.CreatedAt
+                s.CreatedAt,
+                s.Users.Where(u => u.Role == UserRole.Store_Manager || u.Role == UserRole.Franchise_Owner).Select(u => u.Username).FirstOrDefault(),
+                s.Users.Where(u => u.Role == UserRole.Store_Manager || u.Role == UserRole.Franchise_Owner).Select(u => u.FullName).FirstOrDefault(),
+                s.Contract != null ? new StoreContractResponse(
+                    s.Contract.Id,
+                    s.Contract.ContractNumber,
+                    s.Contract.Status,
+                    s.Contract.SignerName,
+                    s.Contract.SignerTitle,
+                    s.Contract.SignerIdCard,
+                    s.Contract.SignedAt,
+                    s.Contract.SignatureData,
+                    s.Contract.RoyaltyRate,
+                    s.Contract.MarketingFeeRate,
+                    s.Contract.TechFeeFixedMonthly
+                ) : null
             ))
             .ToListAsync();
 
@@ -178,7 +199,98 @@ public class StoresController : ControllerBase
         };
 
         _context.Stores.Add(store);
+
+        // 4. Cấp tài khoản Quản lý chi nhánh (nếu có yêu cầu trong request)
+        User? createdManager = null;
+        if (request.ManagerAccount != null && !string.IsNullOrWhiteSpace(request.ManagerAccount.Username))
+        {
+            var username = request.ManagerAccount.Username.Trim().ToLowerInvariant();
+            var isUsernameTaken = await _context.Users.AnyAsync(u => u.Username.ToLower() == username);
+            if (isUsernameTaken)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    title: "Conflict",
+                    detail: $"Tên đăng nhập quản lý '{username}' đã được sử dụng."
+                );
+            }
+
+            createdManager = new User
+            {
+                Username = username,
+                Email = string.IsNullOrWhiteSpace(request.ManagerAccount.Email)
+                    ? $"{username}@{request.Code.Trim().ToLowerInvariant()}.franchise.vn"
+                    : request.ManagerAccount.Email.Trim().ToLowerInvariant(),
+                FullName = string.IsNullOrWhiteSpace(request.ManagerAccount.FullName)
+                    ? $"Quản lý {request.Name.Trim()}"
+                    : request.ManagerAccount.FullName.Trim(),
+                PasswordHash = _passwordHasher.HashPassword(
+                    string.IsNullOrWhiteSpace(request.ManagerAccount.Password) ? "Manager123!" : request.ManagerAccount.Password
+                ),
+                Role = UserRole.Store_Manager,
+                StoreId = store.Id,
+                FranchiseeId = defaultFranchisee.Id,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Users.Add(createdManager);
+        }
+
+        // 5. Ký hợp đồng nhượng quyền trực tuyến (E-Contract nếu có)
+        FranchiseContract? createdContract = null;
+        if (request.ContractSigning != null && !string.IsNullOrWhiteSpace(request.ContractSigning.SignerName))
+        {
+            var royaltyRate = request.ContractSigning.RoyaltyRate > 0 ? request.ContractSigning.RoyaltyRate : 0.05m;
+            var marketingRate = request.ContractSigning.MarketingFeeRate > 0 ? request.ContractSigning.MarketingFeeRate : 0.02m;
+            var techFee = 2000000m;
+
+            createdContract = new FranchiseContract
+            {
+                StoreId = store.Id,
+                ContractNumber = $"HDNQ-{store.Code}-{DateTime.UtcNow:yyyyMMdd}",
+                SignerName = request.ContractSigning.SignerName.Trim(),
+                SignerIdCard = request.ContractSigning.SignerIdCard?.Trim() ?? string.Empty,
+                SignerTitle = string.IsNullOrWhiteSpace(request.ContractSigning.SignerTitle)
+                    ? "Chủ chi nhánh nhượng quyền"
+                    : request.ContractSigning.SignerTitle.Trim(),
+                SignatureData = request.ContractSigning.SignatureBase64 ?? string.Empty,
+                RoyaltyRate = royaltyRate,
+                MarketingFeeRate = marketingRate,
+                TechFeeFixedMonthly = techFee,
+                SignedAt = DateTime.UtcNow,
+                Status = "Signed",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.FranchiseContracts.Add(createdContract);
+
+            var royaltySetting = new StoreRoyaltySetting
+            {
+                StoreId = store.Id,
+                RoyaltyRate = royaltyRate,
+                MarketingFeeRate = marketingRate,
+                TechFeeFixedMonthly = techFee,
+                IsActive = true
+            };
+            _context.StoreRoyaltySettings.Add(royaltySetting);
+        }
+
         await _context.SaveChangesAsync();
+
+        var contractResponse = createdContract != null
+            ? new StoreContractResponse(
+                createdContract.Id,
+                createdContract.ContractNumber,
+                createdContract.Status,
+                createdContract.SignerName,
+                createdContract.SignerTitle,
+                createdContract.SignerIdCard,
+                createdContract.SignedAt,
+                createdContract.SignatureData,
+                createdContract.RoyaltyRate,
+                createdContract.MarketingFeeRate,
+                createdContract.TechFeeFixedMonthly
+            )
+            : null;
 
         var response = new StoreResponse(
             store.Id,
@@ -187,10 +299,130 @@ public class StoresController : ControllerBase
             store.Address,
             store.PhoneNumber,
             store.IsActive,
-            store.CreatedAt
+            store.CreatedAt,
+            createdManager?.Username,
+            createdManager?.FullName,
+            contractResponse
         );
 
         return CreatedAtAction(nameof(GetStoreById), new { id = store.Id }, response);
+    }
+
+    /// <summary>
+    /// Lấy thông tin hợp đồng nhượng quyền điện tử của chi nhánh
+    /// </summary>
+    /// <remarks>GET /api/stores/{id}/contract</remarks>
+    [AllowAnonymous]
+    [HttpGet("{id:guid}/contract")]
+    [ProducesResponseType(typeof(StoreContractResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetStoreContract(Guid id)
+    {
+        var contract = await _context.FranchiseContracts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.StoreId == id);
+
+        if (contract == null)
+        {
+            return NotFound(new { message = "Chi nhánh này chưa có hợp đồng nhượng quyền điện tử." });
+        }
+
+        var response = new StoreContractResponse(
+            contract.Id,
+            contract.ContractNumber,
+            contract.Status,
+            contract.SignerName,
+            contract.SignerTitle,
+            contract.SignerIdCard,
+            contract.SignedAt,
+            contract.SignatureData,
+            contract.RoyaltyRate,
+            contract.MarketingFeeRate,
+            contract.TechFeeFixedMonthly
+        );
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Ký hoặc cập nhật hợp đồng nhượng quyền điện tử cho chi nhánh
+    /// </summary>
+    /// <remarks>POST /api/stores/{id}/contract/sign</remarks>
+    [AllowAnonymous]
+    [HttpPost("{id:guid}/contract/sign")]
+    [ProducesResponseType(typeof(StoreContractResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SignStoreContract(Guid id, [FromBody] OnlineContractSigningRequest request)
+    {
+        var store = await _context.Stores.Include(s => s.Contract).FirstOrDefaultAsync(s => s.Id == id);
+        if (store == null)
+        {
+            return NotFound(new { message = $"Không tìm thấy chi nhánh với ID '{id}'." });
+        }
+
+        var royaltyRate = request.RoyaltyRate > 0 ? request.RoyaltyRate : 0.05m;
+        var marketingRate = request.MarketingFeeRate > 0 ? request.MarketingFeeRate : 0.02m;
+        var techFee = 2000000m;
+
+        var contract = store.Contract;
+        if (contract == null)
+        {
+            contract = new FranchiseContract
+            {
+                StoreId = store.Id,
+                ContractNumber = $"HDNQ-{store.Code}-{DateTime.UtcNow:yyyyMMdd}",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.FranchiseContracts.Add(contract);
+        }
+
+        contract.SignerName = request.SignerName.Trim();
+        contract.SignerIdCard = request.SignerIdCard?.Trim() ?? string.Empty;
+        contract.SignerTitle = string.IsNullOrWhiteSpace(request.SignerTitle) ? "Chủ chi nhánh nhượng quyền" : request.SignerTitle.Trim();
+        contract.SignatureData = request.SignatureBase64 ?? string.Empty;
+        contract.RoyaltyRate = royaltyRate;
+        contract.MarketingFeeRate = marketingRate;
+        contract.TechFeeFixedMonthly = techFee;
+        contract.SignedAt = DateTime.UtcNow;
+        contract.Status = "Signed";
+        contract.UpdatedAt = DateTime.UtcNow;
+
+        var royaltySetting = await _context.StoreRoyaltySettings.FirstOrDefaultAsync(r => r.StoreId == store.Id);
+        if (royaltySetting == null)
+        {
+            royaltySetting = new StoreRoyaltySetting
+            {
+                StoreId = store.Id,
+                RoyaltyRate = royaltyRate,
+                MarketingFeeRate = marketingRate,
+                TechFeeFixedMonthly = techFee,
+                IsActive = true
+            };
+            _context.StoreRoyaltySettings.Add(royaltySetting);
+        }
+        else
+        {
+            royaltySetting.RoyaltyRate = royaltyRate;
+            royaltySetting.MarketingFeeRate = marketingRate;
+        }
+
+        await _context.SaveChangesAsync();
+
+        var response = new StoreContractResponse(
+            contract.Id,
+            contract.ContractNumber,
+            contract.Status,
+            contract.SignerName,
+            contract.SignerTitle,
+            contract.SignerIdCard,
+            contract.SignedAt,
+            contract.SignatureData,
+            contract.RoyaltyRate,
+            contract.MarketingFeeRate,
+            contract.TechFeeFixedMonthly
+        );
+
+        return Ok(response);
     }
 
     /// <summary>

@@ -23,4 +23,5 @@ public class Store : BaseEntity
     public ICollection<StoreInventory> StoreInventories { get; set; } = new List<StoreInventory>();
     public ICollection<Order> Orders { get; set; } = new List<Order>();
     public ICollection<StoreProductPrice> StoreProductPrices { get; set; } = new List<StoreProductPrice>();
+    public FranchiseContract? Contract { get; set; }
 }
