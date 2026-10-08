@@ -1,13 +1,18 @@
 # 🏪 Enterprise Franchise Management System
 
-[![Backend CI](https://img.shields.io/badge/.NET_8-ASP.NET_Core_Web_API-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
-[![Frontend CI](https://img.shields.io/badge/Frontend-React_19_Vite_TS-61DAFB?logo=react)](https://react.dev/)
-[![Database](https://img.shields.io/badge/Database-PostgreSQL_16-336791?logo=postgresql)](https://www.postgresql.org/)
-[![Caching](https://img.shields.io/badge/Cache-Redis_7-DC382D?logo=redis)](https://redis.io/)
-[![Cloud OCI](https://img.shields.io/badge/Cloud-Oracle_Cloud_Always_Free-F80000?logo=oracle)](https://cloud.oracle.com/)
-[![Cloud Vercel](https://img.shields.io/badge/Edge-Vercel_Deployment-000000?logo=vercel)](https://vercel.com/)
-[![Realtime](https://img.shields.io/badge/Realtime-SignalR_WebSockets-512BD4?logo=signal)](https://dotnet.microsoft.com/apps/aspnet/signalr)
-[![Tests](https://img.shields.io/badge/Tests-120_Backend_+_13_Frontend_Passing-brightgreen?logo=checkmarx)]()
+[![CI Backend](https://github.com/wuaghy/franchise-system/actions/workflows/ci-backend.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/ci-backend.yml)
+[![CI Frontend](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml)
+[![Docker CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml)
+[![K3s Deploy CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml)
+[![Tests](https://img.shields.io/badge/Automated_Tests-121_Backend_+_22_Frontend_Passing-brightgreen?logo=checkmarx&logoColor=white)](https://github.com/wuaghy/franchise-system/actions)
+
+[![Backend Platform](https://img.shields.io/badge/.NET_8-ASP.NET_Core_Web_API-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Frontend Platform](https://img.shields.io/badge/Frontend-React_19_Vite_TS-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![Database](https://img.shields.io/badge/Database-PostgreSQL_16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Caching](https://img.shields.io/badge/Cache-Redis_7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Cloud OCI](https://img.shields.io/badge/Cloud-Oracle_Cloud_Always_Free-F80000?logo=oracle&logoColor=white)](https://cloud.oracle.com/)
+[![Cloud Vercel](https://img.shields.io/badge/Edge-Vercel_Deployment-000000?logo=vercel&logoColor=white)](https://vercel.com/)
+[![Realtime](https://img.shields.io/badge/Realtime-SignalR_WebSockets-512BD4?logo=signal&logoColor=white)](https://dotnet.microsoft.com/apps/aspnet/signalr)
 
 Hệ thống Quản trị Chuỗi Cửa hàng Nhượng quyền Đa Chi nhánh (**Enterprise Franchise & Multi-Store Management System**) xây dựng theo chuẩn **Clean Architecture 4 Tầng**, phục vụ vận hành chuỗi F&B từ **Quầy Thu ngân POS Offline Outbox**, **Điều phối pha chế KDS**, **Cung ứng kho tổng STO**, **Tính toán chi phí COGS & BoM**, đến **Khai thác Báo cáo Doanh thu & Thu phí nhượng quyền (Royalty)**.
 
