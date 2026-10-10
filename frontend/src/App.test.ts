@@ -830,6 +830,69 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(zeroWaste.shrinkageRate, 0);
     assert.equal(zeroWaste.totalCostLoss, 0);
   });
+
+  it('correctly converts accented Vietnamese to standard ESC/POS ASCII', async () => {
+    const { removeVietnameseAccents } = await import('./services/printer.ts');
+    assert.equal(removeVietnameseAccents('Cà Phê Sữa Đá Đậm Đà'), 'Ca Phe Sua Da Dam Da');
+    assert.equal(removeVietnameseAccents('Trà Sen Vàng Kem Cheese'), 'Tra Sen Vang Kem Cheese');
+    assert.equal(removeVietnameseAccents('Hóa Đơn Điện Tử Khởi Tạo'), 'Hoa Don Dien Tu Khoi Tao');
+  });
+
+  it('generates compliant ESC/POS binary sequences for printer init, drawer kick, and paper cut', async () => {
+    const { EscPosBuilder, generateCashDrawerKickCommand } = await import('./services/printer.ts');
+
+    // 1. Kick Command
+    const kickBytes = generateCashDrawerKickCommand();
+    // ESC @ (1b 40) + ESC p 0 25 250 (1b 70 00 19 fa)
+    assert.equal(kickBytes[0], 0x1b);
+    assert.equal(kickBytes[1], 0x40);
+    assert.equal(kickBytes[2], 0x1b);
+    assert.equal(kickBytes[3], 0x70);
+    assert.equal(kickBytes[4], 0x00);
+
+    // 2. Cut Command
+    const builder = new EscPosBuilder(48);
+    builder.init().cut(false);
+    const cutBytes = builder.getBytes();
+    // contains GS V 65 0 (1d 56 41 00)
+    const hasGsV = cutBytes.some((b, i) => b === 0x1d && cutBytes[i + 1] === 0x56);
+    assert.equal(hasGsV, true);
+  });
+
+  it('generates complete 80mm ESC/POS receipt payload with full metadata and items', async () => {
+    const { generateReceiptEscPosCommands } = await import('./services/printer.ts');
+
+    const receipt = {
+      storeName: 'Chi nhanh Quan 1',
+      storeAddress: '12 Le Loi, Ben Nghe, Q1, TP. HCM',
+      storePhone: '028 3822 1234',
+      orderNumber: 'ORD-20261010-0088',
+      orderType: 'Dine-in',
+      cashierName: 'Nguyen Van A',
+      counterName: 'Quay 01',
+      createdAt: '10/10/2026 11:15:00',
+      items: [
+        { name: 'Phin Sua Da', quantity: 2, price: 35000, size: 'M' },
+        { name: 'Tra Sen Vang', quantity: 1, price: 45000, toppings: ['Kem cheese'] },
+      ],
+      subtotal: 115000,
+      vatAmount: 9200,
+      discountAmount: 10000,
+      finalAmount: 114200,
+      paymentMethod: 'Cash',
+    };
+
+    const bytes = generateReceiptEscPosCommands(receipt, {
+      openDrawer: true,
+      cutPaper: true,
+      charactersPerLine: 48,
+    });
+
+    assert.ok(bytes.length > 100);
+    // Starts with ESC @
+    assert.equal(bytes[0], 0x1b);
+    assert.equal(bytes[1], 0x40);
+  });
 });
 
 

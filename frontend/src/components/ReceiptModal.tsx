@@ -16,8 +16,14 @@ import {
   Box,
   X,
   FileText,
+  Zap,
 } from "lucide-react";
 import type { DeductedIngredient } from "../services/api.ts";
+import {
+  generateReceiptEscPosCommands,
+  printerHardware,
+  type PrintableReceipt,
+} from "../services/printer.ts";
 
 export interface ReceiptItem {
   name: string;
@@ -56,6 +62,8 @@ export interface ReceiptModalProps {
 export function ReceiptModal({ receipt, onClose, onNewOrder }: ReceiptModalProps) {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<"summary" | "thermal">("summary");
+  const [directPrintStatus, setDirectPrintStatus] = useState<string | null>(null);
+  const [isDirectPrinting, setIsDirectPrinting] = useState(false);
 
   const handleCopyOrderNumber = () => {
     navigator.clipboard?.writeText(receipt.orderNumber);
@@ -65,6 +73,54 @@ export function ReceiptModal({ receipt, onClose, onNewOrder }: ReceiptModalProps
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDirectEscPosPrint = async () => {
+    setIsDirectPrinting(true);
+    setDirectPrintStatus(null);
+    try {
+      const printableReceipt: PrintableReceipt = {
+        storeName: receipt.storeName,
+        storeAddress: receipt.storeAddress,
+        storePhone: receipt.storePhone,
+        orderNumber: receipt.orderNumber,
+        orderType: receipt.orderType,
+        cashierName: receipt.cashierName,
+        counterName: receipt.counterName,
+        createdAt: formattedDate,
+        items: receipt.items,
+        subtotal: receipt.subtotal,
+        vatAmount: receipt.vatAmount,
+        discountAmount: receipt.discountAmount,
+        finalAmount: receipt.finalAmount,
+        paymentMethod: receipt.paymentMethod,
+      };
+
+      const bytes = generateReceiptEscPosCommands(printableReceipt, {
+        openDrawer: true,
+        cutPaper: true,
+        charactersPerLine: 48,
+      });
+
+      const res = await printerHardware.printEscPos(bytes, "usb");
+      setDirectPrintStatus(res.message);
+      setTimeout(() => setDirectPrintStatus(null), 4000);
+    } catch (err: any) {
+      setDirectPrintStatus("Lỗi in ESC/POS: " + (err.message || "Thất bại"));
+      setTimeout(() => setDirectPrintStatus(null), 4000);
+    } finally {
+      setIsDirectPrinting(false);
+    }
+  };
+
+  const handleKickDrawer = async () => {
+    try {
+      const res = await printerHardware.kickDrawer("usb");
+      setDirectPrintStatus(res.message);
+      setTimeout(() => setDirectPrintStatus(null), 3000);
+    } catch (err: any) {
+      alert("Lỗi mở két tiền: " + (err.message || "Thất bại"));
+    }
   };
 
   const formattedDate = (() => {
@@ -386,22 +442,50 @@ export function ReceiptModal({ receipt, onClose, onNewOrder }: ReceiptModalProps
           )}
         </div>
 
+        {directPrintStatus && (
+          <div className="mx-4 mb-2 rounded-xl bg-slate-900 px-3 py-2 text-center text-xs font-semibold text-emerald-400 shadow-md">
+            ⚡ {directPrintStatus}
+          </div>
+        )}
+
         {/* Modal Action Buttons */}
-        <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white p-4">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 py-3 text-xs font-black text-slate-800 shadow-sm hover:bg-slate-100 transition active:scale-98"
-          >
-            <Printer size={16} /> In Hóa Đơn 80mm
-          </button>
-          <button
-            type="button"
-            onClick={onNewOrder}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-red-800 py-3 text-xs font-black text-white shadow-md shadow-red-900/20 hover:bg-red-700 transition active:scale-98"
-          >
-            <span>Tạo Đơn Mới</span> <ArrowUpRight size={15} />
-          </button>
+        <div className="space-y-2 border-t border-slate-200 bg-white p-4">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isDirectPrinting}
+              onClick={handleDirectEscPosPrint}
+              className="flex items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-red-800 to-red-700 py-3 text-xs font-black text-white shadow-md shadow-red-900/20 hover:from-red-700 hover:to-red-600 transition active:scale-98 disabled:opacity-50"
+            >
+              <Zap size={15} className="text-amber-300" />
+              <span>{isDirectPrinting ? "Đang gửi..." : "In ESC/POS Trực Tiếp"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleKickDrawer}
+              className="flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-amber-50 py-3 text-xs font-black text-amber-900 hover:bg-amber-100 transition active:scale-98"
+            >
+              <Banknote size={15} className="text-amber-600" />
+              <span>Mở Két Tiền</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition active:scale-98"
+            >
+              <Printer size={15} /> In Trình Duyệt
+            </button>
+            <button
+              type="button"
+              onClick={onNewOrder}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition active:scale-98"
+            >
+              <span>Tạo Đơn Mới</span> <ArrowUpRight size={15} />
+            </button>
+          </div>
         </div>
       </motion.div>
 
