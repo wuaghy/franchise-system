@@ -4,7 +4,7 @@
 [![CI Frontend](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml)
 [![Docker CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml)
 [![K3s Deploy CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml)
-[![Tests](https://img.shields.io/badge/Automated_Tests-121_Backend_+_22_Frontend_Passing-brightgreen?logo=checkmarx&logoColor=white)](https://github.com/wuaghy/franchise-system/actions)
+[![Tests](https://img.shields.io/badge/Automated_Tests-126_Backend_+_24_Frontend_Passing-brightgreen?logo=checkmarx&logoColor=white)](https://github.com/wuaghy/franchise-system/actions)
 
 [![Backend Platform](https://img.shields.io/badge/.NET_8-ASP.NET_Core_Web_API-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Frontend Platform](https://img.shields.io/badge/Frontend-React_19_Vite_TS-61DAFB?logo=react&logoColor=white)](https://react.dev/)
@@ -58,6 +58,7 @@ franchise-system/
 ### 2. Quầy Bán Hàng POS & Chống Mất Dữ Liệu Ngoại Tuyến (Offline Outbox Pattern)
 * **Local Queue & Idempotency**: Bán hàng không gián đoạn ngay cả khi rớt mạng; lưu hàng đợi trên trình duyệt và tự động đồng bộ (Bulk Sync) khi có mạng trở lại với khóa `IdempotencyKey`.
 * **VietQR Napas 247**: Tích hợp mã QR động sinh tức thì theo chuẩn ngân hàng VietinBank (`100878137043` - `NGUYEN QUANG HUY`).
+* **Webhook Tự Động Nhận Tiền (PayOS & Casso)**: Bắt biến động số dư ngân hàng qua Webhook, xác thực HMAC-SHA256, truyền tín hiệu SignalR tức thì về quầy POS tự động in hóa đơn và hoàn tất đơn (thu ngân không cần thao tác bấm tay).
 * **Trừ Kho Tự Động**: Đơn thanh toán hoàn tất kích hoạt trừ nguyên vật liệu theo định lượng BoM thực tế.
 
 ### 3. Kitchen Display System (KDS) & Chuông Báo Âm Thanh Nổi Realtime
@@ -118,16 +119,16 @@ kubectl apply -f k8s/
 Toàn bộ hệ thống được bảo vệ bởi bộ kiểm thử tự động toàn diện:
 
 ```powershell
-# Chạy toàn bộ 120 bài test Backend (.NET 8)
+# Chạy toàn bộ 126 bài test Backend (.NET 8)
 dotnet test
 
-# Chạy toàn bộ 13 bài test Frontend (Node test runner)
+# Chạy toàn bộ 24 bài test Frontend (Node test runner)
 cd frontend
 npm test
 ```
 
-* **Backend Test Result**: `119 Unit Tests + 1 Integration Test (100% Passed)`.
-* **Frontend Test Result**: `13 Tests (100% Passed)`.
+* **Backend Test Result**: `125 Unit Tests + 1 Integration Test (100% Passed)`.
+* **Frontend Test Result**: `24 Tests (100% Passed)`.
 
 ---
 

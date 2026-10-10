@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -12,10 +12,13 @@ import {
   RefreshCcw,
   Sparkles,
   Volume2,
+  Wifi,
   X,
   Zap,
 } from "lucide-react";
 import { audioNotifier } from "../services/audioNotification.ts";
+import { realtimeHub } from "../services/signalr.ts";
+import { api } from "../services/api.ts";
 
 export interface VietQrModalProps {
   orderCode: string;
@@ -37,7 +40,9 @@ export function VietQrModal({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(300); // 5 minutes
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [confirmedGateway, setConfirmedGateway] = useState<string>("PayOS / Napas 24/7");
   const [simulatingIpn, setSimulatingIpn] = useState(false);
+  const handledRef = useRef(false);
 
   const bankCode = "vietinbank";
   const bankName = "VietinBank (Ngân Hàng TMCP Công Thương VN)";
@@ -50,6 +55,37 @@ export function VietQrModal({
     amount
   )}&addInfo=${encodeURIComponent(transferNote)}&accountName=${encodeURIComponent(accountName)}`;
 
+  // Handle successful payment trigger (from SignalR Webhook or Manual)
+  const triggerPaymentSuccess = useCallback((gatewayName: string = "Napas 24/7 Webhook") => {
+    if (handledRef.current) return;
+    handledRef.current = true;
+
+    setPaymentConfirmed(true);
+    setConfirmedGateway(gatewayName);
+    setSimulatingIpn(false);
+
+    // Audio chime
+    audioNotifier.playOrderChime("standard");
+
+    // Vietnamese Text-to-speech announcement
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        const text = `Đã nhận thành công ${amount.toLocaleString("vi-VN")} đồng qua ${gatewayName} cho đơn hàng ${orderCode}.`;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "vi-VN";
+        utterance.rate = 1.05;
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        // Audio policy or speech synthesis not ready
+      }
+    }
+
+    // Call success handler after brief confirmation animation
+    setTimeout(async () => {
+      await onSuccess();
+    }, 1200);
+  }, [amount, onSuccess, orderCode]);
+
   // Countdown timer
   useEffect(() => {
     if (paymentConfirmed) return;
@@ -58,6 +94,24 @@ export function VietQrModal({
     }, 1000);
     return () => clearInterval(interval);
   }, [paymentConfirmed]);
+
+  // 📡 Realtime Webhook SignalR Listener: Tự động bắt khi ngân hàng có biến động số dư
+  useEffect(() => {
+    const unsubscribe = realtimeHub.onPaymentConfirmed((notification) => {
+      const match =
+        notification.orderNumber.toUpperCase() === orderCode.toUpperCase() ||
+        orderCode.toUpperCase().includes(notification.orderNumber.toUpperCase()) ||
+        notification.orderNumber.toUpperCase().includes(orderCode.toUpperCase());
+
+      if (match) {
+        triggerPaymentSuccess(notification.gateway || "PayOS Napas 24/7 Webhook");
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [orderCode, triggerPaymentSuccess]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -73,32 +127,15 @@ export function VietQrModal({
 
   const handleSimulateIpn = async () => {
     setSimulatingIpn(true);
-    // Simulate real-time Napas 24/7 bank response delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
 
-    setPaymentConfirmed(true);
-    setSimulatingIpn(false);
-
-    // Audio chime
-    audioNotifier.playOrderChime("standard");
-
-    // Vietnamese Text-to-speech announcement
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try {
-        const text = `Đã nhận thành công ${amount.toLocaleString("vi-VN")} đồng qua VietQR Napas cho đơn hàng ${orderCode}.`;
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "vi-VN";
-        utterance.rate = 1.05;
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        // Audio policy or speech synthesis not ready
-      }
+    try {
+      // 1. Thử gọi API Backend để kiểm thử luồng Webhook thực thụ (Backend -> SignalR -> POS)
+      await api.simulatePaymentWebhook(orderCode, amount, "PayOS Simulator");
+    } catch {
+      // 2. Nếu Backend offline hoặc không kết nối được thì dùng fallback animation
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      triggerPaymentSuccess("Napas 24/7 Direct Simulation");
     }
-
-    // Call success handler after brief confirmation animation
-    setTimeout(async () => {
-      await onSuccess();
-    }, 1200);
   };
 
   return (
@@ -245,8 +282,33 @@ export function VietQrModal({
               </div>
             </div>
 
+            {/* Webhook Status Banner */}
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-200/80 bg-slate-50 px-3.5 py-2 text-xs">
+              <div className="flex items-center gap-2">
+                {paymentConfirmed ? (
+                  <>
+                    <CheckCircle2 size={15} className="text-emerald-600" />
+                    <span className="font-bold text-emerald-800">
+                      Đã khớp lệnh thành công ({confirmedGateway})
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="relative flex size-2">
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                    </span>
+                    <span className="text-slate-600">
+                      Webhook SignalR: <strong className="text-slate-800">Tự động nhận tiền 24/7</strong>
+                    </span>
+                  </>
+                )}
+              </div>
+              <span className="font-mono text-[10px] text-slate-400">PayOS & Casso Ready</span>
+            </div>
+
             {/* Actions Footer */}
-            <div className="mt-6 space-y-2">
+            <div className="mt-4 space-y-2">
               <button
                 type="button"
                 onClick={handleSimulateIpn}
@@ -256,17 +318,17 @@ export function VietQrModal({
                 {simulatingIpn ? (
                   <>
                     <RefreshCcw size={18} className="animate-spin" />
-                    <span>Đang xác nhận qua cổng Napas IPN...</span>
+                    <span>Đang kích hoạt Webhook Napas 24/7...</span>
                   </>
                 ) : paymentConfirmed ? (
                   <>
                     <CheckCircle2 size={18} />
-                    <span>Đã Khớp Lệnh Napas 24/7!</span>
+                    <span>Đã Nhận Tiền Từ Ngân Hàng!</span>
                   </>
                 ) : (
                   <>
                     <Zap size={18} className="text-amber-300 fill-amber-300" />
-                    <span>Khách Đã Chuyển Khoản (Giả Lập IPN / Webhook)</span>
+                    <span>Bắn Thử Webhook Biến Động Số Dư (Backend ➔ POS)</span>
                   </>
                 )}
               </button>

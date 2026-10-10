@@ -246,6 +246,26 @@ export const api = {
     return fetchJson(`${API_BASE}/payments/vietqr?${params.toString()}`);
   },
 
+  async simulatePaymentWebhook(orderCode: string, amount: number, gateway?: string): Promise<{ success: boolean; message: string }> {
+    return fetchJson(`${API_BASE}/payments/simulate-webhook`, {
+      method: 'POST',
+      body: JSON.stringify({ orderCode, amount, gateway }),
+    });
+  },
+
+  async getPaymentGatewayStatus(): Promise<{
+    vietQrConfigured: boolean;
+    payOsEnabled: boolean;
+    cassoEnabled: boolean;
+    webhookEndpoints: {
+      payOs: string;
+      casso: string;
+      simulator: string;
+    };
+  }> {
+    return fetchJson(`${API_BASE}/payments/gateway-status`);
+  },
+
   // Products & Menu Catalogue
   async getProducts(categoryId?: string, isAvailable?: boolean): Promise<ProductItem[]> {
     const params = new URLSearchParams();

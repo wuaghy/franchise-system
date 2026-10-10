@@ -43,6 +43,22 @@ public class RealtimeNotificationService : IRealtimeNotificationService
         await _hubContext.Clients.Groups(storeGroup, "hq_admin").ReceiveLowStockAlert(alert);
     }
 
+    public async Task NotifyPaymentConfirmedAsync(Franchise.Application.DTOs.Payments.PaymentConfirmedNotification notification, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("SignalR Broadcasting: PaymentConfirmed Đơn #{OrderNumber} ({Amount:N0} đ) qua {Gateway}",
+            notification.OrderNumber, notification.Amount, notification.Gateway);
+
+        if (notification.StoreId.HasValue)
+        {
+            var storeGroup = $"store_{notification.StoreId.Value}";
+            await _hubContext.Clients.Groups(storeGroup, "hq_admin").ReceivePaymentConfirmed(notification);
+        }
+        else
+        {
+            await _hubContext.Clients.All.ReceivePaymentConfirmed(notification);
+        }
+    }
+
     public async Task NotifyKitchenTicketCreatedAsync(Guid storeId, Franchise.Application.DTOs.Kds.KitchenTicketDto ticket, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("SignalR Broadcasting: KitchenTicketCreated #{TicketNumber} cho Store {StoreId}", ticket.TicketNumber, storeId);

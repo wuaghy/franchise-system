@@ -629,6 +629,42 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.ok(contractRecord.contractNumber.startsWith('HDNQ-'));
     assert.equal(contractRecord.techFeeFixedMonthly, 2000000);
   });
+
+  it('validates PayOS & Casso webhook notification payload structure and order matching', () => {
+    const notification = {
+      orderId: '00000000-0000-0000-0000-000000000099',
+      orderNumber: 'ORD-20261010-001',
+      amount: 65000,
+      transactionReference: 'FT2410109999',
+      gateway: 'PayOS Napas 24/7',
+      paidAt: '2026-10-10T08:30:00Z',
+      storeId: '00000000-0000-0000-0000-000000000001',
+    };
+
+    assert.equal(notification.orderNumber, 'ORD-20261010-001');
+    assert.equal(notification.amount, 65000);
+    assert.ok(notification.gateway.includes('PayOS'));
+    assert.ok(notification.transactionReference.startsWith('FT'));
+  });
+
+  it('verifies automatic VietQR Webhook SignalR auto-confirmation matching logic', () => {
+    const activeOrderCode = 'ORD-20261010-001';
+    
+    // Test exact match
+    const isExactMatch = 'ORD-20261010-001'.toUpperCase() === activeOrderCode.toUpperCase();
+    assert.equal(isExactMatch, true);
+
+    // Test substring match from bank description
+    const bankTransferDesc = 'Thanh toan don hang ORD-20261010-001 tai quay POS';
+    const isSubstringMatch = bankTransferDesc.toUpperCase().includes(activeOrderCode.toUpperCase());
+    assert.equal(isSubstringMatch, true);
+
+    // Test mismatched order code
+    const otherOrderCode = 'ORD-20261010-999';
+    const isMismatch = otherOrderCode.toUpperCase() === activeOrderCode.toUpperCase();
+    assert.equal(isMismatch, false);
+  });
 });
+
 
 

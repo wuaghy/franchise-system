@@ -31,6 +31,16 @@ export interface LowStockAlertNotification {
   triggeredAt: string;
 }
 
+export interface PaymentConfirmedNotification {
+  orderId: string;
+  orderNumber: string;
+  amount: number;
+  transactionReference: string;
+  gateway: string;
+  paidAt: string;
+  storeId?: string;
+}
+
 export type ConnectionStatus = 'Connected' | 'Reconnecting' | 'Disconnected' | 'Connecting';
 
 class SignalRService {
@@ -40,6 +50,7 @@ class SignalRService {
   private orderCompletedListeners: ((data: OrderCompletedNotification) => void)[] = [];
   private inventoryUpdatedListeners: ((data: InventoryUpdatedNotification[]) => void)[] = [];
   private lowStockAlertListeners: ((data: LowStockAlertNotification) => void)[] = [];
+  private paymentConfirmedListeners: ((data: PaymentConfirmedNotification) => void)[] = [];
   private kitchenTicketCreatedListeners: ((ticket: KitchenTicketDto) => void)[] = [];
   private kitchenTicketStatusChangedListeners: ((data: KitchenTicketStatusChangedNotification) => void)[] = [];
   private kitchenTicketItemToggledListeners: ((data: KitchenTicketItemToggledNotification) => void)[] = [];
@@ -86,6 +97,10 @@ class SignalRService {
 
     this.connection.on('ReceiveLowStockAlert', (data: LowStockAlertNotification) => {
       this.lowStockAlertListeners.forEach((fn) => fn(data));
+    });
+
+    this.connection.on('ReceivePaymentConfirmed', (data: PaymentConfirmedNotification) => {
+      this.paymentConfirmedListeners.forEach((fn) => fn(data));
     });
 
     this.connection.on('ReceiveKitchenTicketCreated', (ticket: KitchenTicketDto) => {
@@ -174,6 +189,13 @@ class SignalRService {
     this.lowStockAlertListeners.push(callback);
     return () => {
       this.lowStockAlertListeners = this.lowStockAlertListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onPaymentConfirmed(callback: (data: PaymentConfirmedNotification) => void): () => void {
+    this.paymentConfirmedListeners.push(callback);
+    return () => {
+      this.paymentConfirmedListeners = this.paymentConfirmedListeners.filter((fn) => fn !== callback);
     };
   }
 
