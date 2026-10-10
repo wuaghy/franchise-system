@@ -656,6 +656,164 @@ public class SupplyChainService : ISupplyChainService
         );
     }
 
+    public async Task<SupplyChainKpiSummaryDto> GetSupplyChainKpisAsync(
+        Guid? storeId = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null,
+        CancellationToken ct = default)
+    {
+        var query = _context.StockTransferOrders
+            .AsNoTracking()
+            .Include(o => o.DestinationStore)
+            .AsQueryable();
+
+        if (storeId.HasValue)
+        {
+            query = query.Where(o => o.DestinationStoreId == storeId.Value);
+        }
+
+        if (fromDate.HasValue)
+        {
+            query = query.Where(o => o.CreatedAt >= fromDate.Value);
+        }
+
+        if (toDate.HasValue)
+        {
+            query = query.Where(o => o.CreatedAt <= toDate.Value);
+        }
+
+        var orders = await query.ToListAsync(ct);
+
+        var totalCreated = orders.Count;
+        var inTransitCount = orders.Count(o => o.Status == TransferStatus.Dispatched);
+        var discrepancyCount = orders.Count(o => o.Status == TransferStatus.DiscrepancyReported);
+
+        // Đơn hoàn tất (Received hoặc DiscrepancyReported nhưng đã có ReceivedAt)
+        var completedOrders = orders
+            .Where(o => o.ReceivedAt.HasValue && (o.Status == TransferStatus.Received || o.Status == TransferStatus.DiscrepancyReported))
+            .ToList();
+
+        var totalCompleted = completedOrders.Count;
+
+        // Group theo từng cửa hàng
+        var storesGrouped = orders
+            .GroupBy(o => o.DestinationStoreId)
+            .ToList();
+
+        var storeKpiList = new List<StoreLeadTimeKpiDto>();
+
+        foreach (var storeGroup in storesGrouped)
+        {
+            var firstOrder = storeGroup.First();
+            var sId = storeGroup.Key;
+            var sName = firstOrder.DestinationStore?.Name ?? "Chi nhánh";
+            var sCode = firstOrder.DestinationStore?.Code ?? "STORE";
+
+            var storeOrders = storeGroup.ToList();
+            var storeCompleted = storeOrders
+                .Where(o => o.ReceivedAt.HasValue && (o.Status == TransferStatus.Received || o.Status == TransferStatus.DiscrepancyReported))
+                .ToList();
+
+            double avgApprovalHours = 0;
+            double avgDispatchHours = 0;
+            double avgTransitHours = 0;
+            double avgTotalCycleHours = 0;
+            double onTimeRate = 100.0;
+            var storeDiscrepancyCount = storeOrders.Count(o => o.Status == TransferStatus.DiscrepancyReported);
+
+            if (storeCompleted.Any())
+            {
+                // Approval hours: CreatedAt -> ApprovedAt (hoặc DispatchedAt)
+                var approvalDiffs = storeCompleted
+                    .Where(o => o.ApprovedAt.HasValue)
+                    .Select(o => (o.ApprovedAt!.Value - o.CreatedAt).TotalHours)
+                    .ToList();
+                if (approvalDiffs.Any()) avgApprovalHours = Math.Round(approvalDiffs.Average(), 1);
+
+                // Dispatch hours: ApprovedAt -> DispatchedAt
+                var dispatchDiffs = storeCompleted
+                    .Where(o => o.ApprovedAt.HasValue && o.DispatchedAt.HasValue && o.DispatchedAt.Value >= o.ApprovedAt.Value)
+                    .Select(o => (o.DispatchedAt!.Value - o.ApprovedAt!.Value).TotalHours)
+                    .ToList();
+                if (dispatchDiffs.Any()) avgDispatchHours = Math.Round(dispatchDiffs.Average(), 1);
+
+                // Transit Lead-Time: DispatchedAt -> ReceivedAt
+                var transitDiffs = storeCompleted
+                    .Where(o => o.DispatchedAt.HasValue && o.ReceivedAt.HasValue && o.ReceivedAt.Value >= o.DispatchedAt.Value)
+                    .Select(o => (o.ReceivedAt!.Value - o.DispatchedAt!.Value).TotalHours)
+                    .ToList();
+                if (transitDiffs.Any()) avgTransitHours = Math.Round(transitDiffs.Average(), 1);
+
+                // Total Cycle: CreatedAt -> ReceivedAt
+                var totalCycleDiffs = storeCompleted
+                    .Where(o => o.ReceivedAt.HasValue && o.ReceivedAt.Value >= o.CreatedAt)
+                    .Select(o => (o.ReceivedAt!.Value - o.CreatedAt).TotalHours)
+                    .ToList();
+                if (totalCycleDiffs.Any())
+                {
+                    avgTotalCycleHours = Math.Round(totalCycleDiffs.Average(), 1);
+                    // On-time SLA: Chu kỳ hoàn tất <= 48 giờ (2 ngày)
+                    var onTimeCount = totalCycleDiffs.Count(h => h <= 48.0);
+                    onTimeRate = Math.Round((double)onTimeCount / totalCycleDiffs.Count * 100.0, 1);
+                }
+            }
+
+            storeKpiList.Add(new StoreLeadTimeKpiDto(
+                sId,
+                sName,
+                sCode,
+                storeOrders.Count,
+                storeCompleted.Count,
+                avgApprovalHours,
+                avgDispatchHours,
+                avgTransitHours,
+                avgTotalCycleHours,
+                onTimeRate,
+                storeDiscrepancyCount
+            ));
+        }
+
+        // Toàn hệ thống
+        double sysAvgTransit = 0;
+        double sysAvgCycle = 0;
+        double sysOnTimeRate = 100.0;
+        double discrepancyRate = totalCreated > 0 
+            ? Math.Round((double)discrepancyCount / totalCreated * 100.0, 1) 
+            : 0;
+
+        if (completedOrders.Any())
+        {
+            var allTransitDiffs = completedOrders
+                .Where(o => o.DispatchedAt.HasValue && o.ReceivedAt.HasValue && o.ReceivedAt.Value >= o.DispatchedAt.Value)
+                .Select(o => (o.ReceivedAt!.Value - o.DispatchedAt!.Value).TotalHours)
+                .ToList();
+            if (allTransitDiffs.Any()) sysAvgTransit = Math.Round(allTransitDiffs.Average(), 1);
+
+            var allCycleDiffs = completedOrders
+                .Where(o => o.ReceivedAt.HasValue && o.ReceivedAt.Value >= o.CreatedAt)
+                .Select(o => (o.ReceivedAt!.Value - o.CreatedAt).TotalHours)
+                .ToList();
+            if (allCycleDiffs.Any())
+            {
+                sysAvgCycle = Math.Round(allCycleDiffs.Average(), 1);
+                var onTimeOrdersCount = allCycleDiffs.Count(h => h <= 48.0);
+                sysOnTimeRate = Math.Round((double)onTimeOrdersCount / allCycleDiffs.Count * 100.0, 1);
+            }
+        }
+
+        return new SupplyChainKpiSummaryDto(
+            totalCreated,
+            totalCompleted,
+            inTransitCount,
+            discrepancyCount,
+            sysAvgTransit,
+            sysAvgCycle,
+            sysOnTimeRate,
+            discrepancyRate,
+            storeKpiList.OrderByDescending(s => s.TotalOrders).ToList()
+        );
+    }
+
     private static StockTransferOrderDto MapToDto(StockTransferOrder order)
     {
         return new StockTransferOrderDto(
@@ -668,6 +826,7 @@ public class SupplyChainService : ISupplyChainService
             order.DestinationStore?.Code ?? string.Empty,
             order.Status.ToString(),
             order.DispatchTrackingNumber,
+            order.ApprovedAt,
             order.DispatchedAt,
             order.ReceivedAt,
             order.CreatedAt,

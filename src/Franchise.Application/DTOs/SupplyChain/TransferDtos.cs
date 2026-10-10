@@ -24,6 +24,7 @@ public record StockTransferOrderDto(
     string DestinationStoreCode,
     string Status,
     string? DispatchTrackingNumber,
+    DateTime? ApprovedAt,
     DateTime? DispatchedAt,
     DateTime? ReceivedAt,
     DateTime CreatedAt,
@@ -33,6 +34,33 @@ public record StockTransferOrderDto(
     string? RejectionReason,
     string? DiscrepancyNotes,
     List<StockTransferItemDto> Items
+);
+
+// DTOs cho Báo Cáo Phân Tích Chuỗi Cung Ứng & Lead-Time KPI
+public record StoreLeadTimeKpiDto(
+    Guid StoreId,
+    string StoreName,
+    string StoreCode,
+    int TotalOrders,
+    int CompletedOrders,
+    double AvgApprovalHours,    // Thời gian trung bình từ tạo đơn -> HQ duyệt
+    double AvgDispatchHours,    // Thời gian từ duyệt -> Kho tổng xuất hàng
+    double AvgTransitHours,     // Thời gian từ xuất kho -> Cửa hàng nghiệm thu (Transit Lead-Time)
+    double AvgTotalCycleHours,  // Tổng thời gian chu kỳ từ tạo đơn -> nhận hàng
+    double OnTimeDeliveryRate,  // Tỷ lệ giao đúng hạn theo cam kết SLA (ví dụ <= 48h)
+    int DiscrepancyOrdersCount  // Số đơn có ghi nhận lệch/hao hụt
+);
+
+public record SupplyChainKpiSummaryDto(
+    int TotalOrdersCreated,
+    int TotalOrdersCompleted,
+    int InTransitOrdersCount,
+    int DiscrepancyReportedCount,
+    double SystemAvgTransitHours,
+    double SystemAvgTotalCycleHours,
+    double OverallOnTimeDeliveryRate,
+    double DiscrepancyRatePercentage,
+    List<StoreLeadTimeKpiDto> StoreKpis
 );
 
 public record CreateTransferItemRequest(

@@ -396,6 +396,15 @@ export const api = {
     });
     return fetchJson(`${API_BASE}/transfers/suggestions/${storeId}?${params.toString()}`);
   },
+
+  async getSupplyChainKpis(storeId?: string, fromDate?: string, toDate?: string): Promise<SupplyChainKpiSummary> {
+    const params = new URLSearchParams();
+    if (storeId) params.append('storeId', storeId);
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return fetchJson(`${API_BASE}/transfers/kpis${queryString}`);
+  },
 };
 
 export interface CustomerData {
@@ -681,6 +690,32 @@ export interface AutoReorderSuggestionResponse {
   itemsNeedingReorderCount: number;
   totalEstimatedCost: number;
   suggestions: AutoReorderSuggestionItem[];
+}
+
+export interface StoreLeadTimeKpi {
+  storeId: string;
+  storeName: string;
+  storeCode: string;
+  totalOrders: number;
+  completedOrders: number;
+  avgApprovalHours: number;
+  avgDispatchHours: number;
+  avgTransitHours: number;
+  avgTotalCycleHours: number;
+  onTimeDeliveryRate: number;
+  discrepancyOrdersCount: number;
+}
+
+export interface SupplyChainKpiSummary {
+  totalOrdersCreated: number;
+  totalOrdersCompleted: number;
+  inTransitOrdersCount: number;
+  discrepancyReportedCount: number;
+  systemAvgTransitHours: number;
+  systemAvgTotalCycleHours: number;
+  overallOnTimeDeliveryRate: number;
+  discrepancyRatePercentage: number;
+  storeKpis: StoreLeadTimeKpi[];
 }
 
 

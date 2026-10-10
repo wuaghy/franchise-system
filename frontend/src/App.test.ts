@@ -1031,7 +1031,67 @@ describe('Franchise Frontend Enterprise Suite', () => {
     const totalEstCost = suggestions.reduce((sum, s) => sum + s.estimatedCost, 0);
     assert.equal(totalEstCost, 11500 * 250 + 45 * 22000);
   });
+
+  it('calculates supply chain lead-times and SLA on-time delivery rate accurately', () => {
+    interface MockOrderLifecycle {
+      transferCode: string;
+      createdAt: string;
+      approvedAt?: string;
+      dispatchedAt?: string;
+      receivedAt?: string;
+      status: string;
+    }
+
+    const mockOrders: MockOrderLifecycle[] = [
+      {
+        transferCode: 'STO-01',
+        createdAt: '2026-10-01T08:00:00Z',
+        approvedAt: '2026-10-01T12:00:00Z', // 4h
+        dispatchedAt: '2026-10-01T16:00:00Z', // 4h
+        receivedAt: '2026-10-02T08:00:00Z', // 16h transit -> Total = 24h
+        status: 'Received',
+      },
+      {
+        transferCode: 'STO-02',
+        createdAt: '2026-10-02T09:00:00Z',
+        approvedAt: '2026-10-02T15:00:00Z', // 6h
+        dispatchedAt: '2026-10-02T21:00:00Z', // 6h
+        receivedAt: '2026-10-03T17:00:00Z', // 20h transit -> Total = 32h
+        status: 'Received',
+      },
+      {
+        transferCode: 'STO-03',
+        createdAt: '2026-10-03T10:00:00Z',
+        approvedAt: '2026-10-03T12:00:00Z',
+        dispatchedAt: '2026-10-03T18:00:00Z',
+        status: 'Dispatched', // Still in transit
+      },
+    ];
+
+    const completed = mockOrders.filter((o) => o.receivedAt && o.status === 'Received');
+    assert.equal(completed.length, 2);
+
+    const getDiffHours = (start: string, end: string) => {
+      return (new Date(end).getTime() - new Date(start).getTime()) / (1000 * 60 * 60);
+    };
+
+    const transitHours = completed.map((o) => getDiffHours(o.dispatchedAt!, o.receivedAt!));
+    assert.deepEqual(transitHours, [16, 20]);
+    const avgTransit = transitHours.reduce((a, b) => a + b, 0) / transitHours.length;
+    assert.equal(avgTransit, 18);
+
+    const totalCycleHours = completed.map((o) => getDiffHours(o.createdAt, o.receivedAt!));
+    assert.deepEqual(totalCycleHours, [24, 32]);
+    const avgCycle = totalCycleHours.reduce((a, b) => a + b, 0) / totalCycleHours.length;
+    assert.equal(avgCycle, 28);
+
+    // SLA On-Time: Orders completing within 48 hours
+    const onTimeCount = totalCycleHours.filter((h) => h <= 48).length;
+    const onTimeRate = (onTimeCount / totalCycleHours.length) * 100;
+    assert.equal(onTimeRate, 100);
+  });
 });
+
 
 
 

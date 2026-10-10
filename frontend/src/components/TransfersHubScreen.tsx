@@ -23,6 +23,8 @@ import {
   Sparkles,
   ShoppingCart,
   TrendingDown,
+  BarChart3,
+  Timer,
 } from "lucide-react";
 import {
   getTransferOrders,
@@ -44,7 +46,7 @@ import {
 } from "../services/transfers.ts";
 import { type User } from "../services/auth.ts";
 import { costingApi, type IngredientItem } from "../services/costing.ts";
-import { api, type AutoReorderSuggestionResponse } from "../services/api.ts";
+import { api, type AutoReorderSuggestionResponse, type SupplyChainKpiSummary } from "../services/api.ts";
 
 export interface TransferStoreOption {
   id: string;
@@ -126,7 +128,7 @@ export interface TransfersHubScreenProps {
 }
 
 export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubScreenProps) {
-  const [activeTab, setActiveTab] = useState<"transfers" | "warehouse" | "suggestions">("transfers");
+  const [activeTab, setActiveTab] = useState<"transfers" | "warehouse" | "suggestions" | "analytics">("transfers");
   const [orders, setOrders] = useState<StockTransferOrderDto[]>([]);
   const [stores, setStores] = useState<TransferStoreOption[]>(defaultTransferStores);
   const [warehouses, setWarehouses] = useState<WarehouseDto[]>(initialMockWarehouses);
@@ -173,6 +175,11 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
   const [reorderSuggestions, setReorderSuggestions] = useState<AutoReorderSuggestionResponse | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [selectedSuggestionItems, setSelectedSuggestionItems] = useState<{ [ingId: string]: boolean }>({});
+
+  // Supply Chain & Lead-Time Analytics
+  const [kpiSummary, setKpiSummary] = useState<SupplyChainKpiSummary | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(false);
+  const [kpiStoreFilter, setKpiStoreFilter] = useState<string>("ALL");
 
   // Load data
   const loadData = async () => {
@@ -426,6 +433,19 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
     }
   };
 
+  const fetchKpis = async (storeId?: string) => {
+    try {
+      setKpiLoading(true);
+      const sid = storeId && storeId !== "ALL" ? storeId : undefined;
+      const res = await api.getSupplyChainKpis(sid);
+      setKpiSummary(res);
+    } catch (err: any) {
+      alert("Không thể tải báo cáo Lead-Time KPI: " + err.message);
+    } finally {
+      setKpiLoading(false);
+    }
+  };
+
   function renderStatusBadge(status: TransferStatus) {
     switch (status) {
       case "Draft":
@@ -550,6 +570,19 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
               {reorderSuggestions.itemsNeedingReorderCount} cần đặt
             </span>
           )}
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("analytics");
+            if (!kpiSummary) {
+              fetchKpis();
+            }
+          }}
+          className={`flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-bold transition ${
+            activeTab === "analytics" ? "border-red-800 text-red-800" : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <BarChart3 size={16} /> 📊 Phân Tích Chuỗi Cung Ứng & Lead-Time KPI
         </button>
       </div>
 
@@ -1013,6 +1046,173 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                     <tr>
                       <td colSpan={10} className="py-12 text-center text-slate-400">
                         {suggestionsLoading ? "Đang tính toán đề xuất..." : "Chưa có dữ liệu đề xuất hoặc không có nguyên liệu."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: SUPPLY CHAIN & LEAD-TIME KPI ANALYTICS */}
+      {activeTab === "analytics" && (
+        <div className="space-y-5">
+          {/* Controls Bar */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                  <BarChart3 size={13} /> Supply Chain SLA & Lead-Time Intelligence
+                </span>
+                <h3 className="text-lg font-black text-slate-900">
+                  Phân Tích Vòng Đời Đơn Điều Chuyển (Lead-Time KPI)
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Đo lường thời gian xử lý: Trình duyệt &rarr; Phê duyệt &rarr; Xuất kho tổng &rarr; Vận chuyển (Transit) &rarr; Nghiệm thu tại cửa hàng.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchKpis(kpiStoreFilter)}
+                  disabled={kpiLoading}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition disabled:opacity-50"
+                >
+                  <RefreshCcw size={14} className={kpiLoading ? "animate-spin text-purple-600" : ""} />
+                  {kpiLoading ? "Đang tính..." : "Cập Nhật KPI"}
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+              <div className="w-full sm:w-72">
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Lọc theo chi nhánh:</label>
+                <select
+                  value={kpiStoreFilter}
+                  onChange={(e) => {
+                    setKpiStoreFilter(e.target.value);
+                    fetchKpis(e.target.value);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 p-2 text-xs font-semibold outline-none focus:border-red-800"
+                >
+                  <option value="ALL">Toàn Bộ Hệ Thống (All Stores)</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* KPI Stat Cards */}
+          {kpiSummary && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500">Tỷ Lệ Giao Đúng Hạn (SLA)</span>
+                  <span className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><CheckCircle2 size={18} /></span>
+                </div>
+                <div className="mt-3 text-2xl font-black text-emerald-700">{kpiSummary.overallOnTimeDeliveryRate}%</div>
+                <span className="mt-1 block text-[11px] font-semibold text-slate-400">Cam kết giao nhận &le; 48 giờ</span>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500">Thời Gian Vận Chuyển TB</span>
+                  <span className="grid size-9 place-items-center rounded-xl bg-purple-50 text-purple-600"><Truck size={18} /></span>
+                </div>
+                <div className="mt-3 text-2xl font-black text-purple-900">{kpiSummary.systemAvgTransitHours}h</div>
+                <span className="mt-1 block text-[11px] font-semibold text-purple-600">Từ kho tổng tới cửa hàng</span>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500">Tổng Vòng Đời Đơn TB</span>
+                  <span className="grid size-9 place-items-center rounded-xl bg-blue-50 text-blue-600"><Timer size={18} /></span>
+                </div>
+                <div className="mt-3 text-2xl font-black text-blue-900">{kpiSummary.systemAvgTotalCycleHours}h</div>
+                <span className="mt-1 block text-[11px] font-semibold text-blue-600">Từ tạo đơn tới hoàn tất</span>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500">Tỷ Lệ Đơn Có Sai Lệch</span>
+                  <span className="grid size-9 place-items-center rounded-xl bg-rose-50 text-rose-600"><AlertTriangle size={18} /></span>
+                </div>
+                <div className="mt-3 text-2xl font-black text-rose-900">{kpiSummary.discrepancyRatePercentage}%</div>
+                <span className="mt-1 block text-[11px] font-semibold text-rose-600">{kpiSummary.discrepancyReportedCount} đơn lệch / {kpiSummary.totalOrdersCreated} đơn</span>
+              </div>
+            </div>
+          )}
+
+          {/* Store Lead-Time Comparison Table */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <Timer size={15} className="text-red-700" /> Bảng Đối Soát Hiệu Suất & Lead-Time Theo Chi Nhánh
+              </h4>
+              <span className="text-[11px] font-semibold text-slate-400">
+                {kpiSummary?.storeKpis.length || 0} chi nhánh được theo dõi
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Mã Store</th>
+                    <th className="py-3 px-4">Tên chi nhánh</th>
+                    <th className="py-3 px-4 text-center">Tổng đơn</th>
+                    <th className="py-3 px-4 text-center">Hoàn tất</th>
+                    <th className="py-3 px-4 text-right">Duyệt (h)</th>
+                    <th className="py-3 px-4 text-right">Xuất kho (h)</th>
+                    <th className="py-3 px-4 text-right">Vận chuyển (h)</th>
+                    <th className="py-3 px-4 text-right font-black text-purple-900">Tổng chu kỳ (h)</th>
+                    <th className="py-3 px-4 text-center font-black text-emerald-900">Đúng hạn SLA</th>
+                    <th className="py-3 px-4 text-center">Đơn lệch</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {kpiSummary && kpiSummary.storeKpis.length > 0 ? (
+                    kpiSummary.storeKpis.map((kpi) => (
+                      <tr key={kpi.storeId} className="hover:bg-slate-50/60 transition">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">{kpi.storeCode}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">{kpi.storeName}</td>
+                        <td className="py-3 px-4 text-center font-bold text-slate-700">{kpi.totalOrders}</td>
+                        <td className="py-3 px-4 text-center font-bold text-emerald-700">{kpi.completedOrders}</td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-600">{kpi.avgApprovalHours}h</td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-600">{kpi.avgDispatchHours}h</td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-600">{kpi.avgTransitHours}h</td>
+                        <td className="py-3 px-4 text-right font-mono font-black text-purple-900">{kpi.avgTotalCycleHours}h</td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${
+                            kpi.onTimeDeliveryRate >= 90
+                              ? "bg-emerald-100 text-emerald-800"
+                              : kpi.onTimeDeliveryRate >= 75
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}>
+                            {kpi.onTimeDeliveryRate}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {kpi.discrepancyOrdersCount > 0 ? (
+                            <span className="font-bold text-rose-700">{kpi.discrepancyOrdersCount}</span>
+                          ) : (
+                            <span className="text-slate-400">0</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={10} className="py-12 text-center text-slate-400">
+                        {kpiLoading ? "Đang tổng hợp báo cáo hiệu suất..." : "Chưa có dữ liệu vòng đời đơn STO."}
                       </td>
                     </tr>
                   )}

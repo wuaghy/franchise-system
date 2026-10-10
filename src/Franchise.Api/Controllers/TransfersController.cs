@@ -206,5 +206,21 @@ public class TransfersController : ControllerBase
         var result = await _supplyChainService.GetAutoReorderSuggestionsAsync(storeId, planningDays, leadTimeDays, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Báo cáo Phân tích Chuỗi Cung ứng & Lead-Time KPI toàn chuỗi
+    /// </summary>
+    [HttpGet("kpis")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(SupplyChainKpiSummaryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSupplyChainKpis(
+        [FromQuery] Guid? storeId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        CancellationToken ct = default)
+    {
+        var result = await _supplyChainService.GetSupplyChainKpisAsync(storeId, fromDate, toDate, ct);
+        return Ok(result);
+    }
 }
 

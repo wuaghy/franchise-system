@@ -531,5 +531,80 @@ public class SupplyChainServiceTests
         coffeeSuggestion.RecommendedOrderQuantity.Should().Be(16m);
         coffeeSuggestion.EstimatedTotalCost.Should().Be(16m * 120000m); // 1,920,000 đ
     }
+
+    [Fact]
+    public async Task GetSupplyChainKpis_ShouldCalculateLeadTimesAndSlaMetricsAccurately()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var (warehouse, store, coffee, _) = await SeedDataAsync(context);
+
+        var now = DateTime.UtcNow;
+
+        // Order 1: Hoàn tất đúng hạn trong 24 giờ
+        var order1 = new StockTransferOrder
+        {
+            TransferCode = "STO-202610-0001",
+            SourceWarehouseId = warehouse.Id,
+            DestinationStoreId = store.Id,
+            Status = TransferStatus.Received,
+            CreatedAt = now.AddHours(-24),
+            ApprovedAt = now.AddHours(-20), // 4h duyệt
+            DispatchedAt = now.AddHours(-16), // 4h xuất kho
+            ReceivedAt = now, // 16h vận chuyển -> Tổng = 24h (<= 48h SLA)
+        };
+
+        // Order 2: Đang trên đường vận chuyển (Dispatched)
+        var order2 = new StockTransferOrder
+        {
+            TransferCode = "STO-202610-0002",
+            SourceWarehouseId = warehouse.Id,
+            DestinationStoreId = store.Id,
+            Status = TransferStatus.Dispatched,
+            CreatedAt = now.AddHours(-10),
+            ApprovedAt = now.AddHours(-8),
+            DispatchedAt = now.AddHours(-5),
+        };
+
+        // Order 3: Có lệch hao hụt (DiscrepancyReported)
+        var order3 = new StockTransferOrder
+        {
+            TransferCode = "STO-202610-0003",
+            SourceWarehouseId = warehouse.Id,
+            DestinationStoreId = store.Id,
+            Status = TransferStatus.DiscrepancyReported,
+            CreatedAt = now.AddHours(-30),
+            ApprovedAt = now.AddHours(-25),
+            DispatchedAt = now.AddHours(-20),
+            ReceivedAt = now.AddHours(-2), // 18h vận chuyển -> Tổng = 28h (<= 48h SLA)
+        };
+
+        context.StockTransferOrders.AddRange(order1, order2, order3);
+        await context.SaveChangesAsync();
+
+        var service = new SupplyChainService(context);
+
+        // Act
+        var kpis = await service.GetSupplyChainKpisAsync();
+
+        // Assert
+        kpis.TotalOrdersCreated.Should().Be(3);
+        kpis.TotalOrdersCompleted.Should().Be(2); // order1 & order3
+        kpis.InTransitOrdersCount.Should().Be(1); // order2
+        kpis.DiscrepancyReportedCount.Should().Be(1); // order3
+        kpis.OverallOnTimeDeliveryRate.Should().Be(100.0); // cả 2 đơn hoàn tất đều <= 48h
+        kpis.SystemAvgTransitHours.Should().Be(17.0); // (16 + 18) / 2 = 17.0h
+        kpis.SystemAvgTotalCycleHours.Should().Be(26.0); // (24 + 28) / 2 = 26.0h
+
+        kpis.StoreKpis.Should().HaveCount(1);
+        var storeKpi = kpis.StoreKpis.First();
+        storeKpi.StoreId.Should().Be(store.Id);
+        storeKpi.CompletedOrders.Should().Be(2);
+        storeKpi.AvgTransitHours.Should().Be(17.0);
+        storeKpi.AvgTotalCycleHours.Should().Be(26.0);
+        storeKpi.OnTimeDeliveryRate.Should().Be(100.0);
+        storeKpi.DiscrepancyOrdersCount.Should().Be(1);
+    }
 }
+
 

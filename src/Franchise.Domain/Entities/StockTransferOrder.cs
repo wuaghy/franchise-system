@@ -15,6 +15,7 @@ public class StockTransferOrder : BaseEntity
 
     public TransferStatus Status { get; set; } = TransferStatus.Draft;
     public string? DispatchTrackingNumber { get; set; }
+    public DateTime? ApprovedAt { get; set; }
     public DateTime? DispatchedAt { get; set; }
     public DateTime? ReceivedAt { get; set; }
 
@@ -45,6 +46,7 @@ public class StockTransferOrder : BaseEntity
 
         Status = TransferStatus.Approved;
         ApprovedByUserId = approvedByUserId;
+        ApprovedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 

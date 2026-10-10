@@ -28,4 +28,11 @@ public interface ISupplyChainService
         int planningDays = 7, 
         int leadTimeDays = 2, 
         CancellationToken cancellationToken = default);
+
+    // Báo cáo Phân tích Chuỗi Cung ứng & Lead-Time KPI
+    Task<SupplyChainKpiSummaryDto> GetSupplyChainKpisAsync(
+        Guid? storeId = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null,
+        CancellationToken cancellationToken = default);
 }
