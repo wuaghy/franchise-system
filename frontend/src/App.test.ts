@@ -893,7 +893,60 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(bytes[0], 0x1b);
     assert.equal(bytes[1], 0x40);
   });
+
+  it('accurately computes Stock Audit discrepancies, cost loss/gain, and summary totals', () => {
+    const auditItems = [
+      {
+        ingredientId: 'ing-1',
+        name: 'Cà phê Robusta',
+        systemStock: 25.0,
+        physicalCount: 22.5, // Thiếu 2.5kg
+        standardCost: 150000,
+      },
+      {
+        ingredientId: 'ing-2',
+        name: 'Sữa đặc Ngôi sao',
+        systemStock: 40.0,
+        physicalCount: 44.0, // Thừa 4 hộp
+        standardCost: 24000,
+      },
+      {
+        ingredientId: 'ing-3',
+        name: 'Trà Oolong',
+        systemStock: 10.0,
+        physicalCount: 10.0, // Khớp
+        standardCost: 180000,
+      },
+    ];
+
+    const results = auditItems.map((it) => {
+      const discrepancy = it.physicalCount - it.systemStock;
+      const totalCost = discrepancy * it.standardCost;
+      return {
+        ...it,
+        discrepancy,
+        totalCost,
+        isDiscrepant: discrepancy !== 0,
+      };
+    });
+
+    const discrepantCount = results.filter((r) => r.isDiscrepant).length;
+    const totalDiscrepancyCost = results.reduce((sum, r) => sum + r.totalCost, 0);
+
+    // Assert individual
+    assert.equal(results[0].discrepancy, -2.5);
+    assert.equal(results[0].totalCost, -375000); // 2.5 * 150,000 = -375,000 đ
+    assert.equal(results[1].discrepancy, 4.0);
+    assert.equal(results[1].totalCost, 96000);   // 4 * 24,000 = +96,000 đ
+    assert.equal(results[2].discrepancy, 0);
+    assert.equal(results[2].totalCost, 0);
+
+    // Assert totals
+    assert.equal(discrepantCount, 2);
+    assert.equal(totalDiscrepancyCost, -279000); // -375,000 + 96,000 = -279,000 đ
+  });
 });
+
 
 
 

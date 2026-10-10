@@ -27,6 +27,7 @@ import {
   Trash2,
   Bell,
   Users,
+  ClipboardCheck,
 } from "lucide-react";
 import {
   reportsService,
@@ -43,7 +44,8 @@ import {
   type WasteShrinkageReport, 
   type LowStockAlert, 
   type AlertBroadcastResult,
-  type InventoryItem 
+  type InventoryItem,
+  type SubmitStockAuditResponse
 } from "../services/api.ts";
 
 interface AnalyticsHubScreenProps {
@@ -98,7 +100,7 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
     currentUser?.storeId || defaultStores[0].id
   );
   const [dateRange, setDateRange] = useState<"today" | "7d" | "30d">("30d");
-  const [activeTab, setActiveTab] = useState<"overview" | "heatmap" | "royalty" | "waste" | "alerts">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "heatmap" | "royalty" | "waste" | "alerts" | "audit">("overview");
 
   const [summary, setSummary] = useState<FinancialSummaryDto>(initialEmptySummary);
   const [heatmap, setHeatmap] = useState<HourlySalesHeatmapDto>(initialEmptyHeatmap);
@@ -110,6 +112,13 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
   const [wasteReport, setWasteReport] = useState<WasteShrinkageReport | null>(null);
   const [lowStockList, setLowStockList] = useState<LowStockAlert[]>([]);
   const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
+
+  // Stock Audit State
+  const [auditAuditorName, setAuditAuditorName] = useState(currentUser?.fullName || "Quản lý cửa hàng");
+  const [auditNotes, setAuditNotes] = useState("Kiểm kê định kỳ");
+  const [auditCounts, setAuditCounts] = useState<{ [ingredientId: string]: number }>({});
+  const [auditSubmitting, setAuditSubmitting] = useState(false);
+  const [auditResult, setAuditResult] = useState<SubmitStockAuditResponse | null>(null);
 
   // Alert & Telegram broadcast
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -255,6 +264,37 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
       alert("Lỗi ghi nhận xuất hủy: " + (err.message || "Thất bại"));
     } finally {
       setWasteSubmitting(false);
+    }
+  };
+
+  const handleSubmitAudit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStoreId || allInventory.length === 0) return;
+
+    setAuditSubmitting(true);
+    setAuditResult(null);
+    try {
+      const items = allInventory.map((item) => ({
+        ingredientId: item.ingredientId,
+        physicalCount: auditCounts[item.ingredientId] !== undefined ? auditCounts[item.ingredientId] : item.currentStock,
+        note: auditCounts[item.ingredientId] !== undefined && auditCounts[item.ingredientId] !== item.currentStock 
+          ? "Điều chỉnh kiểm kê thực tế" 
+          : "Khớp tồn kho",
+      }));
+
+      const res = await api.submitStockAudit(selectedStoreId, {
+        storeId: selectedStoreId,
+        auditorName: auditAuditorName.trim() || "Quản lý chi nhánh",
+        notes: auditNotes,
+        items,
+      });
+
+      setAuditResult(res);
+      await loadData();
+    } catch (err: any) {
+      alert("Lỗi nộp kiểm kê kho: " + (err.message || "Thất bại"));
+    } finally {
+      setAuditSubmitting(false);
     }
   };
 
@@ -561,6 +601,17 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
             }`}
           >
             Sổ cái Hóa đơn Phí HQ ({invoices.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("audit")}
+            className={`rounded-xl px-4 py-2 text-xs font-extrabold transition-colors flex items-center gap-1.5 ${
+              activeTab === "audit"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-blue-50 text-blue-800 hover:bg-blue-100"
+            }`}
+          >
+            <ClipboardCheck size={13} />
+            Kiểm Kê Kho Kỳ (Stock Audit)
           </button>
         </div>
 
@@ -1201,6 +1252,208 @@ export function AnalyticsHubScreen({ currentUser }: AnalyticsHubScreenProps) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* TAB 6: KIỂM KÊ KHO KỲ (STOCK AUDIT & PHYSICAL COUNT) */}
+      {activeTab === "audit" && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white p-5 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
+                  <ClipboardCheck size={14} /> Kiểm kê Kho Thực tế & Cân bằng Tồn kho
+                </span>
+                <h3 className="mt-2 text-lg font-black text-slate-900">
+                  Biên Bản Kiểm Kê Nguyên Vật Liệu Chi Nhánh
+                </h3>
+                <p className="mt-1 text-xs text-slate-600 max-w-2xl">
+                  Nhập số lượng thực đếm tại quầy và kho lạnh. Hệ thống tự động so sánh với số dư trên phần mềm, tính toán giá trị chênh lệch (Loss/Gain) và ghi nhận giao dịch điều chỉnh kiểm kê (Audit Adjustment).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const resetObj: { [id: string]: number } = {};
+                    allInventory.forEach((it) => {
+                      resetObj[it.ingredientId] = it.currentStock;
+                    });
+                    setAuditCounts(resetObj);
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Điền nhanh theo Hệ thống
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Audit Result Banner */}
+          {auditResult && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-sm space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                  <CheckCircle2 size={20} className="text-emerald-600" />
+                  <span>{auditResult.message}</span>
+                </div>
+                <span className="text-xs text-emerald-700 font-mono">
+                  {new Date(auditResult.auditedAt).toLocaleString("vi-VN")}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-xs pt-1">
+                <div className="rounded-xl bg-white p-3 border border-emerald-100">
+                  <span className="text-slate-500 font-medium">Số mặt hàng kiểm kê:</span>
+                  <p className="text-sm font-black text-slate-800 mt-0.5">{auditResult.totalItemsAudited} nguyên liệu</p>
+                </div>
+                <div className="rounded-xl bg-white p-3 border border-emerald-100">
+                  <span className="text-slate-500 font-medium">Mặt hàng lệch tồn:</span>
+                  <p className="text-sm font-black text-amber-600 mt-0.5">{auditResult.discrepancyItemCount} mặt hàng</p>
+                </div>
+                <div className="rounded-xl bg-white p-3 border border-emerald-100">
+                  <span className="text-slate-500 font-medium">Tổng giá trị chênh lệch:</span>
+                  <p className={`text-sm font-black mt-0.5 ${auditResult.totalDiscrepancyCost < 0 ? "text-rose-600" : "text-emerald-700"}`}>
+                    {auditResult.totalDiscrepancyCost.toLocaleString("vi-VN")} ₫
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Audit Form */}
+          <form onSubmit={handleSubmitAudit} className="space-y-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Người phụ trách kiểm kê:
+                  </label>
+                  <input
+                    type="text"
+                    value={auditAuditorName}
+                    onChange={(e) => setAuditAuditorName(e.target.value)}
+                    placeholder="Họ tên Quản lý / Giám sát ca"
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Ghi chú đợt kiểm kê:
+                  </label>
+                  <input
+                    type="text"
+                    value={auditNotes}
+                    onChange={(e) => setAuditNotes(e.target.value)}
+                    placeholder="Ví dụ: Kiểm kê định kỳ Chủ Nhật, đối soát tủ mát"
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Inventory Items Count Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-3">Mã NL</th>
+                      <th className="py-3 px-3">Tên Nguyên Liệu</th>
+                      <th className="py-3 px-3">Đơn Vị</th>
+                      <th className="py-3 px-3 text-right">Sổ Sách (HT)</th>
+                      <th className="py-3 px-3 text-right w-36">Thực Đếm (TT)</th>
+                      <th className="py-3 px-3 text-right">Chênh Lệch</th>
+                      <th className="py-3 px-3">Trạng Thái</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {allInventory.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-slate-400">
+                          Chưa có dữ liệu nguyên vật liệu trong kho chi nhánh.
+                        </td>
+                      </tr>
+                    ) : (
+                      allInventory.map((item) => {
+                        const currentActual = auditCounts[item.ingredientId] !== undefined
+                          ? auditCounts[item.ingredientId]
+                          : item.currentStock;
+                        const diff = currentActual - item.currentStock;
+
+                        return (
+                          <tr key={item.ingredientId} className="hover:bg-slate-50/60 transition">
+                            <td className="py-3 px-3 font-mono font-bold text-slate-500">
+                              {item.ingredientCode}
+                            </td>
+                            <td className="py-3 px-3 font-bold text-slate-900">
+                              {item.ingredientName}
+                            </td>
+                            <td className="py-3 px-3 text-slate-500">
+                              {item.unit}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-bold text-slate-700">
+                              {item.currentStock.toLocaleString("vi-VN")}
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={currentActual}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setAuditCounts((prev) => ({
+                                    ...prev,
+                                    [item.ingredientId]: val,
+                                  }));
+                                }}
+                                className="w-28 rounded-lg border border-slate-200 p-1.5 text-right font-mono text-xs font-bold text-slate-900 focus:border-blue-500 outline-none"
+                              />
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-bold">
+                              {diff === 0 ? (
+                                <span className="text-slate-400">0</span>
+                              ) : diff > 0 ? (
+                                <span className="text-emerald-600">+{diff}</span>
+                              ) : (
+                                <span className="text-rose-600">{diff}</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3">
+                              {diff === 0 ? (
+                                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                                  Khớp
+                                </span>
+                              ) : diff > 0 ? (
+                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                                  Thừa kho (+{diff})
+                                </span>
+                              ) : (
+                                <span className="rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 border border-rose-200">
+                                  Hao hụt ({diff})
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={auditSubmitting || allInventory.length === 0}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-xs font-black text-white shadow-md shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-50 transition active:scale-98"
+                >
+                  <ClipboardCheck size={16} />
+                  <span>{auditSubmitting ? "Đang xử lý cân bằng kho..." : "Xác nhận & Cân bằng Tồn kho"}</span>
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
 

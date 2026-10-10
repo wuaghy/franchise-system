@@ -138,4 +138,27 @@ public class InventoryController : ControllerBase
         var result = await _inventoryService.UpdateStoreAlertConfigAsync(storeId, request, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Nộp phiếu kiểm kê kho kỳ và tự động điều chỉnh cân bằng tồn kho (Stock Audit)
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("audit")]
+    [ProducesResponseType(typeof(SubmitStockAuditResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SubmitStockAudit(
+        Guid storeId,
+        [FromBody] SubmitStockAuditRequest request,
+        CancellationToken ct)
+    {
+        if (storeId != request.StoreId)
+        {
+            throw new RequestValidationException("storeId", "StoreId trong URL và Body không trùng khớp.");
+        }
+
+        var result = await _inventoryService.SubmitStockAuditAsync(request, ct);
+        return Ok(result);
+    }
 }
+

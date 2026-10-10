@@ -381,6 +381,13 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+
+  async submitStockAudit(storeId: string, payload: SubmitStockAuditPayload): Promise<SubmitStockAuditResponse> {
+    return fetchJson(`${API_BASE}/stores/${storeId}/inventory/audit`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export interface CustomerData {
@@ -600,6 +607,44 @@ export interface AlertBroadcastResult {
   emailSent: boolean;
   emailStatus?: string;
   sentAt: string;
+}
+
+export interface StockAuditItemPayload {
+  ingredientId: string;
+  physicalCount: number;
+  note?: string;
+}
+
+export interface SubmitStockAuditPayload {
+  storeId: string;
+  auditorName: string;
+  notes?: string;
+  items: StockAuditItemPayload[];
+}
+
+export interface StockAuditDiscrepancyItem {
+  ingredientId: string;
+  ingredientCode: string;
+  ingredientName: string;
+  unit: string;
+  systemStock: number;
+  physicalCount: number;
+  discrepancy: number;
+  standardCost: number;
+  totalValueDiscrepancy: number;
+  note?: string;
+}
+
+export interface SubmitStockAuditResponse {
+  storeId: string;
+  storeName: string;
+  auditorName: string;
+  auditedAt: string;
+  totalItemsAudited: number;
+  discrepancyItemCount: number;
+  totalDiscrepancyCost: number;
+  items: StockAuditDiscrepancyItem[];
+  message: string;
 }
 
 

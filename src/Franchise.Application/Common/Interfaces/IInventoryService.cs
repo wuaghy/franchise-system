@@ -40,4 +40,9 @@ public interface IInventoryService
         Guid storeId, 
         UpdateStoreAlertConfigRequest request, 
         CancellationToken ct = default);
+
+    // Kiểm kê kho kỳ & cân bằng tồn kho tự động (Stock Audit & Physical Count)
+    Task<SubmitStockAuditResponse> SubmitStockAuditAsync(
+        SubmitStockAuditRequest request,
+        CancellationToken ct = default);
 }

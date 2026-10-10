@@ -112,3 +112,42 @@ public record AlertBroadcastResultDto(
     DateTime SentAt
 );
 
+// DTOs cho Kiểm Kê Kho Kỳ (Stock Audit & Physical Inventory Count)
+public record StockAuditItemRequest(
+    Guid IngredientId,
+    decimal PhysicalCount, // Số lượng kiểm đếm thực tế
+    string? Note = null
+);
+
+public record SubmitStockAuditRequest(
+    Guid StoreId,
+    string AuditorName,
+    string? Notes,
+    List<StockAuditItemRequest> Items
+);
+
+public record StockAuditDiscrepancyItem(
+    Guid IngredientId,
+    string IngredientCode,
+    string IngredientName,
+    string Unit,
+    decimal SystemStock,     // Số lượng trên sổ sách/hệ thống
+    decimal PhysicalCount,   // Số lượng thực đếm
+    decimal Discrepancy,     // PhysicalCount - SystemStock (+ là thừa, - là thiếu)
+    decimal StandardCost,    // Đơn giá vốn
+    decimal TotalValueDiscrepancy, // Discrepancy * StandardCost
+    string? Note
+);
+
+public record SubmitStockAuditResponse(
+    Guid StoreId,
+    string StoreName,
+    string AuditorName,
+    DateTime AuditedAt,
+    int TotalItemsAudited,
+    int DiscrepancyItemCount,
+    decimal TotalDiscrepancyCost,
+    List<StockAuditDiscrepancyItem> Items,
+    string Message
+);
+

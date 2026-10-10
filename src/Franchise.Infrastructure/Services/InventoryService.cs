@@ -515,4 +515,138 @@ public class InventoryService : IInventoryService
             DateTime.UtcNow
         );
     }
+
+    public async Task<SubmitStockAuditResponse> SubmitStockAuditAsync(
+        SubmitStockAuditRequest request,
+        CancellationToken ct = default)
+    {
+        if (request.Items == null || request.Items.Count == 0)
+        {
+            throw new RequestValidationException(nameof(request.Items), "Danh sách kiểm kê không được để trống.");
+        }
+
+        var store = await _context.Stores
+            .FirstOrDefaultAsync(s => s.Id == request.StoreId, ct)
+            ?? throw new NotFoundException("STORE_NOT_FOUND", $"Không tìm thấy chi nhánh với ID '{request.StoreId}'.");
+
+        var requestedIngredientIds = request.Items.Select(i => i.IngredientId).Distinct().ToList();
+
+        var existingInventories = await _context.StoreInventories
+            .Include(si => si.Ingredient)
+            .Where(si => si.StoreId == request.StoreId && requestedIngredientIds.Contains(si.IngredientId))
+            .ToListAsync(ct);
+
+        var ingredientsMap = await _context.Ingredients
+            .Where(i => requestedIngredientIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, ct);
+
+        var discrepancyList = new List<StockAuditDiscrepancyItem>();
+        decimal totalCostDiscrepancy = 0m;
+        var now = DateTime.UtcNow;
+
+        foreach (var item in request.Items)
+        {
+            if (!ingredientsMap.TryGetValue(item.IngredientId, out var ingredient))
+            {
+                continue;
+            }
+
+            var inventory = existingInventories.FirstOrDefault(si => si.IngredientId == item.IngredientId);
+            if (inventory == null)
+            {
+                inventory = new StoreInventory
+                {
+                    StoreId = request.StoreId,
+                    IngredientId = item.IngredientId,
+                    CurrentStock = 0,
+                    MinAlertThreshold = 10,
+                    LastCountedAt = now
+                };
+                _context.StoreInventories.Add(inventory);
+            }
+
+            var systemStock = inventory.CurrentStock;
+            var physicalCount = Math.Max(0, item.PhysicalCount);
+            var discrepancy = physicalCount - systemStock; // + là thừa, - là thiếu
+            var costLossOrGain = discrepancy * ingredient.StandardCost;
+
+            totalCostDiscrepancy += costLossOrGain;
+
+            // Cập nhật tồn kho theo kết quả kiểm kê thực tế
+            inventory.CurrentStock = physicalCount;
+            inventory.LastCountedAt = now;
+
+            // Nếu có chênh lệch, ghi log giao dịch điều chỉnh kiểm kê
+            if (discrepancy != 0)
+            {
+                var auditNote = string.IsNullOrWhiteSpace(item.Note)
+                    ? $"Kiểm kê kho bởi {request.AuditorName}: Hệ thống ({systemStock}) -> Thực tế ({physicalCount})"
+                    : $"Kiểm kê kho bởi {request.AuditorName}: {item.Note} (HT: {systemStock} -> TT: {physicalCount})";
+
+                var transaction = new InventoryTransaction
+                {
+                    StoreId = request.StoreId,
+                    IngredientId = item.IngredientId,
+                    TransactionType = InventoryTransactionType.Audit_Adjustment,
+                    QuantityChange = discrepancy,
+                    BalanceAfter = physicalCount,
+                    Note = auditNote
+                };
+                _context.InventoryTransactions.Add(transaction);
+            }
+
+            discrepancyList.Add(new StockAuditDiscrepancyItem(
+                ingredient.Id,
+                ingredient.Code,
+                ingredient.Name,
+                ingredient.Unit,
+                systemStock,
+                physicalCount,
+                discrepancy,
+                ingredient.StandardCost,
+                costLossOrGain,
+                item.Note
+            ));
+        }
+
+        await _context.SaveChangesAsync(ct);
+
+        // Realtime notification broadcast
+        if (_notificationService != null)
+        {
+            try
+            {
+                var updateNotifs = discrepancyList
+                    .Where(d => d.Discrepancy != 0)
+                    .Select(d => new InventoryUpdatedNotification(request.StoreId, d.IngredientId, d.IngredientName, d.Discrepancy, d.PhysicalCount))
+                    .ToList();
+
+                if (updateNotifs.Count > 0)
+                {
+                    await _notificationService.NotifyInventoryUpdatedAsync(request.StoreId, updateNotifs, ct);
+                }
+            }
+            catch
+            {
+                // Ignore realtime broadcast error
+            }
+        }
+
+        var discrepancyItemCount = discrepancyList.Count(d => d.Discrepancy != 0);
+        var msg = discrepancyItemCount > 0
+            ? $"Đã hoàn tất kiểm kê kho. Phát hiện {discrepancyItemCount} mặt hàng có chênh lệch và đã tự động cân bằng tồn kho."
+            : "Đã hoàn tất kiểm kê kho. Tồn kho thực tế khớp 100% với hệ thống!";
+
+        return new SubmitStockAuditResponse(
+            store.Id,
+            store.Name,
+            request.AuditorName,
+            now,
+            request.Items.Count,
+            discrepancyItemCount,
+            totalCostDiscrepancy,
+            discrepancyList,
+            msg
+        );
+    }
 }

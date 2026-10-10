@@ -215,4 +215,72 @@ public class InventoryServiceTests
         mockTelegram.Verify(t => t.SendLowStockAlertAsync(store.TelegramChatId, store.Name, Moq.It.IsAny<List<LowStockAlertResponse>>(), Moq.It.IsAny<CancellationToken>()), Moq.Times.Once);
         mockEmail.Verify(e => e.SendBatchLowStockAlertEmailAsync(store.ManagerEmail, store.Name, Moq.It.IsAny<List<LowStockAlertResponse>>(), Moq.It.IsAny<CancellationToken>()), Moq.Times.Once);
     }
+
+    [Fact]
+    public async Task SubmitStockAudit_ShouldUpdatePhysicalStock_AndLogAuditTransactions()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var storeId = Guid.NewGuid();
+        var ing1Id = Guid.NewGuid();
+        var ing2Id = Guid.NewGuid();
+
+        context.Stores.Add(new Store { Id = storeId, Code = "STR_AUDIT", Name = "Store Audit Test", Address = "HCM" });
+        context.Ingredients.Add(new Ingredient { Id = ing1Id, Code = "COF", Name = "Cà phê Robusta", Unit = "kg", StandardCost = 150000 });
+        context.Ingredients.Add(new Ingredient { Id = ing2Id, Code = "MLK", Name = "Sữa đặc", Unit = "hop", StandardCost = 25000 });
+
+        // System stock: COF = 20kg, MLK = 50 hộp
+        context.StoreInventories.Add(new StoreInventory { StoreId = storeId, IngredientId = ing1Id, CurrentStock = 20, MinAlertThreshold = 5 });
+        context.StoreInventories.Add(new StoreInventory { StoreId = storeId, IngredientId = ing2Id, CurrentStock = 50, MinAlertThreshold = 10 });
+        await context.SaveChangesAsync();
+
+        var service = new InventoryService(context);
+
+        // Act: Physical count: COF = 18kg (thiếu 2kg), MLK = 53 hộp (thừa 3 hộp)
+        var request = new SubmitStockAuditRequest(
+            storeId,
+            "Quản lý ca sáng",
+            "Kiểm kê định kỳ đầu tuần",
+            new List<StockAuditItemRequest>
+            {
+                new(ing1Id, 18, "Hao hụt xay cà phê rơi vãi"),
+                new(ing2Id, 53, "Kiểm sót thùng phụ")
+            }
+        );
+
+        var result = await service.SubmitStockAuditAsync(request);
+
+        // Assert
+        result.TotalItemsAudited.Should().Be(2);
+        result.DiscrepancyItemCount.Should().Be(2);
+
+        // Check COF: Discrepancy = 18 - 20 = -2, Cost = -2 * 150,000 = -300,000
+        var cofItem = result.Items.First(i => i.IngredientId == ing1Id);
+        cofItem.Discrepancy.Should().Be(-2);
+        cofItem.TotalValueDiscrepancy.Should().Be(-300000);
+
+        // Check MLK: Discrepancy = 53 - 50 = +3, Cost = +3 * 25,000 = +75,000
+        var mlkItem = result.Items.First(i => i.IngredientId == ing2Id);
+        mlkItem.Discrepancy.Should().Be(3);
+        mlkItem.TotalValueDiscrepancy.Should().Be(75000);
+
+        result.TotalDiscrepancyCost.Should().Be(-225000);
+
+        // Verify Database updated to Physical Counts
+        var updatedCof = await context.StoreInventories.FirstAsync(si => si.StoreId == storeId && si.IngredientId == ing1Id);
+        updatedCof.CurrentStock.Should().Be(18);
+
+        var updatedMlk = await context.StoreInventories.FirstAsync(si => si.StoreId == storeId && si.IngredientId == ing2Id);
+        updatedMlk.CurrentStock.Should().Be(53);
+
+        // Verify Audit Adjustment transactions logged
+        var auditTransactions = await context.InventoryTransactions
+            .Where(t => t.StoreId == storeId && t.TransactionType == InventoryTransactionType.Audit_Adjustment)
+            .ToListAsync();
+
+        auditTransactions.Should().HaveCount(2);
+        auditTransactions.First(t => t.IngredientId == ing1Id).QuantityChange.Should().Be(-2);
+        auditTransactions.First(t => t.IngredientId == ing2Id).QuantityChange.Should().Be(3);
+    }
 }
+
