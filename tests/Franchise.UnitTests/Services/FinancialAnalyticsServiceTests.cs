@@ -187,4 +187,99 @@ public class FinancialAnalyticsServiceTests
         result.StoreRankings.Should().HaveCount(1);
         result.StoreRankings[0].StoreId.Should().Be(store.Id);
     }
+
+    [Fact]
+    public async Task GetAdvancedPeakHoursAnalysis_ShouldIdentifyBusiestHourAndStaffing()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var (store, _) = await SeedSampleDataAsync(context);
+        var service = new FinancialAnalyticsService(context);
+        var seedDate = DateTime.UtcNow.Date.AddDays(-1);
+
+        // Act
+        var result = await service.GetAdvancedPeakHoursAnalysisAsync(store.Id, seedDate);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.StoreId.Should().Be(store.Id);
+        result.TotalOrders.Should().Be(2);
+        result.BusiestHourRange.Should().NotBeNullOrEmpty();
+        result.RecommendedStaffingOnPeak.Should().BeGreaterThanOrEqualTo(3);
+        result.RecommendedStaffingOffPeak.Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    [Fact]
+    public async Task GetTopSellersMenuEngineering_ShouldClassifyItem()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var (store, product) = await SeedSampleDataAsync(context);
+        var service = new FinancialAnalyticsService(context);
+
+        // Act
+        var result = await service.GetTopSellersMenuEngineeringAsync(store.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+        result[0].ProductId.Should().Be(product.Id);
+        result[0].UnitsSold.Should().Be(3);
+        result[0].MenuClassification.Should().BeOneOf("Star", "Plowhorse", "Puzzle", "Dog");
+    }
+
+    [Fact]
+    public async Task GetWasteShrinkageReport_ShouldCalculateShrinkageAndCostAccurately()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var storeId = Guid.NewGuid();
+        var ingId = Guid.NewGuid();
+
+        var store = new Store { Id = storeId, Code = "ST-TEST", Name = "Store Test" };
+        context.Stores.Add(store);
+
+        var ingredient = new Ingredient { Id = ingId, Code = "SYR", Name = "Syrup Đào", Unit = "chai", StandardCost = 80000 };
+        context.Ingredients.Add(ingredient);
+
+        // Outbound sale: 95 chai lý thuyết
+        context.InventoryTransactions.Add(new InventoryTransaction
+        {
+            StoreId = storeId,
+            IngredientId = ingId,
+            TransactionType = InventoryTransactionType.Outbound_Sale,
+            QuantityChange = -95,
+            BalanceAfter = 5,
+            CreatedAt = DateTime.UtcNow.AddDays(-2)
+        });
+
+        // Waste spoiled: 5 chai bị vỡ
+        context.InventoryTransactions.Add(new InventoryTransaction
+        {
+            StoreId = storeId,
+            IngredientId = ingId,
+            TransactionType = InventoryTransactionType.Waste_Spoiled,
+            QuantityChange = -5,
+            BalanceAfter = 0,
+            CreatedAt = DateTime.UtcNow.AddDays(-1)
+        });
+
+        await context.SaveChangesAsync();
+
+        var service = new FinancialAnalyticsService(context);
+
+        // Act
+        var report = await service.GetWasteShrinkageReportAsync(storeId);
+
+        // Assert
+        report.Should().NotBeNull();
+        report.TotalTheoreticalUsage.Should().Be(95);
+        report.TotalWastedQuantity.Should().Be(5);
+        // Shrinkage = 5 / (95 + 5) * 100 = 5%
+        report.OverallShrinkageRatePercentage.Should().Be(5.00m);
+        report.TotalWasteCost.Should().Be(5 * 80000); // 400,000 VND
+        report.Items.Should().HaveCount(1);
+        report.Items[0].ShrinkageRatePercentage.Should().Be(5.00m);
+        report.Items[0].Status.Should().Be("Warning");
+    }
 }

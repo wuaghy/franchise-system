@@ -239,4 +239,181 @@ public class FinancialAnalyticsService : IFinancialAnalyticsService
             storeRankings
         );
     }
+
+    public async Task<AdvancedPeakHoursAnalysisDto> GetAdvancedPeakHoursAnalysisAsync(
+        Guid storeId, 
+        DateTime? date = null, 
+        CancellationToken ct = default)
+    {
+        var heatmap = await GetHourlySalesHeatmapAsync(storeId, date, ct);
+
+        var peakPoints = heatmap.HourlyDistribution.Where(h => h.IsPeakHour).ToList();
+        var peakOrderCount = peakPoints.Sum(h => h.OrderCount);
+        var peakRevenue = peakPoints.Sum(h => h.Revenue);
+
+        var busiestPoint = heatmap.HourlyDistribution.OrderByDescending(h => h.Revenue).ThenByDescending(h => h.OrderCount).FirstOrDefault() 
+            ?? new HourlySalesPointDto(12, 0, 0, true);
+        var busiestHour = busiestPoint.Hour;
+        var busiestRange = $"{busiestHour:D2}:00 - {((busiestHour + 1) % 24):D2}:00";
+
+        var peakHoursCount = peakPoints.Count > 0 ? peakPoints.Count : 1;
+        var avgPeakOrdersPerHour = (double)peakOrderCount / peakHoursCount;
+        var offPeakPoints = heatmap.HourlyDistribution.Where(h => !h.IsPeakHour).ToList();
+        var avgOffPeakOrdersPerHour = offPeakPoints.Count > 0 ? (double)offPeakPoints.Sum(h => h.OrderCount) / offPeakPoints.Count : 0;
+
+        // Định biên nhân sự F&B: Peak = tối thiểu 3 người (1 thu ngân, 2 pha chế) + 1 người mỗi 10 đơn/giờ vượt mức
+        var staffingPeak = Math.Max(3, (int)Math.Ceiling(avgPeakOrdersPerHour / 8.0) + 1);
+        var staffingOffPeak = Math.Max(2, (int)Math.Ceiling(avgOffPeakOrdersPerHour / 10.0) + 1);
+
+        return new AdvancedPeakHoursAnalysisDto(
+            heatmap.StoreId,
+            heatmap.StoreName,
+            heatmap.Date,
+            heatmap.TotalOrders,
+            heatmap.TotalRevenue,
+            peakOrderCount,
+            peakRevenue,
+            busiestHour,
+            busiestRange,
+            staffingPeak,
+            staffingOffPeak,
+            heatmap.HourlyDistribution
+        );
+    }
+
+    public async Task<List<TopSellerItemDto>> GetTopSellersMenuEngineeringAsync(
+        Guid storeId, 
+        DateTime? fromDate = null, 
+        DateTime? toDate = null, 
+        int top = 10, 
+        CancellationToken ct = default)
+    {
+        var rawPerformance = await GetProductSalesPerformanceAsync(storeId, fromDate, toDate, 50, ct);
+        if (!rawPerformance.Any()) return new List<TopSellerItemDto>();
+
+        var avgUnits = rawPerformance.Average(p => (double)p.UnitsSold);
+        var avgMargin = rawPerformance.Average(p => (double)p.MarginPercentage);
+
+        var results = rawPerformance.Select(p =>
+        {
+            var isHighPopularity = p.UnitsSold >= avgUnits;
+            var isHighProfitability = (double)p.MarginPercentage >= avgMargin;
+
+            string classification;
+            if (isHighPopularity && isHighProfitability)
+                classification = "Star";
+            else if (isHighPopularity && !isHighProfitability)
+                classification = "Plowhorse";
+            else if (!isHighPopularity && isHighProfitability)
+                classification = "Puzzle";
+            else
+                classification = "Dog";
+
+            return new TopSellerItemDto(
+                p.ProductId,
+                p.ProductName,
+                p.Sku,
+                p.UnitsSold,
+                p.Revenue,
+                p.EstimatedGrossProfit,
+                p.MarginPercentage,
+                p.RevenueSharePercentage,
+                classification
+            );
+        })
+        .Take(top)
+        .ToList();
+
+        return results;
+    }
+
+    public async Task<WasteShrinkageReportDto> GetWasteShrinkageReportAsync(
+        Guid storeId, 
+        DateTime? fromDate = null, 
+        DateTime? toDate = null, 
+        CancellationToken ct = default)
+    {
+        var store = await _context.Stores
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == storeId, ct)
+            ?? throw new NotFoundException("STORE_NOT_FOUND", $"Không tìm thấy chi nhánh với ID '{storeId}'.");
+
+        var start = fromDate ?? DateTime.UtcNow.Date.AddDays(-30);
+        var end = toDate ?? DateTime.UtcNow;
+
+        var transactions = await _context.InventoryTransactions
+            .AsNoTracking()
+            .Include(t => t.Ingredient)
+            .Where(t => t.StoreId == storeId && t.CreatedAt >= start && t.CreatedAt <= end)
+            .ToListAsync(ct);
+
+        var grouped = transactions
+            .GroupBy(t => t.IngredientId)
+            .Select(g =>
+            {
+                var ingredient = g.FirstOrDefault()?.Ingredient;
+                var ingName = ingredient?.Name ?? "Nguyên liệu";
+                var ingCode = ingredient?.Code ?? "ING";
+                var unit = ingredient?.Unit ?? "kg";
+                var unitCost = ingredient?.StandardCost ?? 0m;
+
+                var theoreticalUsage = g.Where(t => t.TransactionType == InventoryTransactionType.Outbound_Sale)
+                                        .Sum(t => Math.Abs(t.QuantityChange));
+
+                var wastedQuantity = g.Where(t => t.TransactionType == InventoryTransactionType.Waste_Spoiled ||
+                                                 (t.TransactionType == InventoryTransactionType.Audit_Adjustment && t.QuantityChange < 0))
+                                      .Sum(t => Math.Abs(t.QuantityChange));
+
+                var totalWasteCost = Math.Round(wastedQuantity * unitCost, 0);
+
+                var totalHandled = theoreticalUsage + wastedQuantity;
+                var shrinkageRate = totalHandled > 0 ? Math.Round((wastedQuantity / totalHandled) * 100m, 2) : 0m;
+
+                string status;
+                if (shrinkageRate <= 2.0m) status = "Normal";
+                else if (shrinkageRate <= 5.0m) status = "Warning";
+                else status = "Critical";
+
+                return new WasteItemDetailDto(
+                    g.Key,
+                    ingCode,
+                    ingName,
+                    unit,
+                    theoreticalUsage,
+                    wastedQuantity,
+                    unitCost,
+                    totalWasteCost,
+                    shrinkageRate,
+                    status
+                );
+            })
+            .Where(w => w.TheoreticalUsage > 0 || w.WastedQuantity > 0)
+            .OrderByDescending(w => w.TotalWasteCost)
+            .ToList();
+
+        var totalTheoretical = grouped.Sum(g => g.TheoreticalUsage);
+        var totalWasted = grouped.Sum(g => g.WastedQuantity);
+        var totalCost = grouped.Sum(g => g.TotalWasteCost);
+
+        var grandTotal = totalTheoretical + totalWasted;
+        var overallRate = grandTotal > 0 ? Math.Round((totalWasted / grandTotal) * 100m, 2) : 0m;
+
+        string healthRating;
+        if (overallRate <= 2.0m) healthRating = "Tốt (Tỷ lệ hao hụt đạt chuẩn F&B < 2%)";
+        else if (overallRate <= 5.0m) healthRating = "Cần lưu ý (Hao hụt ở mức 2% - 5%)";
+        else healthRating = "Báo động (> 5% - Nguy cơ thất thoát / đổ vỡ nghiêm trọng)";
+
+        return new WasteShrinkageReportDto(
+            store.Id,
+            store.Name,
+            start,
+            end,
+            totalTheoretical,
+            totalWasted,
+            totalCost,
+            overallRate,
+            healthRating,
+            grouped
+        );
+    }
 }

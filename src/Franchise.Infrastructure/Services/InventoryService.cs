@@ -14,11 +14,22 @@ public class InventoryService : IInventoryService
 {
     private readonly AppDbContext _context;
     private readonly IRealtimeNotificationService? _notificationService;
+    private readonly ITelegramService? _telegramService;
+    private readonly IEmailService? _emailService;
+    private readonly Microsoft.Extensions.Configuration.IConfiguration? _configuration;
 
-    public InventoryService(AppDbContext context, IRealtimeNotificationService? notificationService = null)
+    public InventoryService(
+        AppDbContext context, 
+        IRealtimeNotificationService? notificationService = null,
+        ITelegramService? telegramService = null,
+        IEmailService? emailService = null,
+        Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
     {
         _context = context;
         _notificationService = notificationService;
+        _telegramService = telegramService;
+        _emailService = emailService;
+        _configuration = configuration;
     }
 
     public async Task<InventoryDeductionResult> ProcessOrderInventoryDeductionAsync(
@@ -349,6 +360,159 @@ public class InventoryService : IInventoryService
             inventory.CurrentStock,
             inventory.MinAlertThreshold,
             inventory.LastCountedAt
+        );
+    }
+
+    public async Task<RecordWasteResponse> RecordWasteAsync(
+        RecordWasteRequest request, 
+        CancellationToken ct = default)
+    {
+        if (request.Quantity <= 0)
+        {
+            throw new RequestValidationException(nameof(request.Quantity), "Số lượng xuất hủy phải lớn hơn 0.");
+        }
+
+        var ingredient = await _context.Ingredients
+            .FirstOrDefaultAsync(i => i.Id == request.IngredientId, ct)
+            ?? throw new NotFoundException("INGREDIENT_NOT_FOUND", $"Không tìm thấy nguyên liệu có ID '{request.IngredientId}'.");
+
+        var inventory = await _context.StoreInventories
+            .FirstOrDefaultAsync(si => si.StoreId == request.StoreId && si.IngredientId == request.IngredientId, ct)
+            ?? throw new NotFoundException("INVENTORY_NOT_FOUND", $"Chi nhánh chưa có kho cho nguyên liệu '{ingredient.Name}'.");
+
+        inventory.CurrentStock -= request.Quantity;
+        inventory.LastCountedAt = DateTime.UtcNow;
+
+        var transaction = new InventoryTransaction
+        {
+            StoreId = request.StoreId,
+            IngredientId = request.IngredientId,
+            TransactionType = InventoryTransactionType.Waste_Spoiled,
+            QuantityChange = -request.Quantity,
+            BalanceAfter = inventory.CurrentStock,
+            Note = string.IsNullOrWhiteSpace(request.Reason) ? "Xuất hủy nguyên liệu do rơi vỡ/hư hỏng" : request.Reason
+        };
+        _context.InventoryTransactions.Add(transaction);
+
+        await _context.SaveChangesAsync(ct);
+
+        if (_notificationService != null)
+        {
+            try
+            {
+                await _notificationService.NotifyInventoryUpdatedAsync(
+                    request.StoreId,
+                    new[] { new InventoryUpdatedNotification(request.StoreId, request.IngredientId, ingredient.Name, -request.Quantity, inventory.CurrentStock) },
+                    ct);
+
+                if (inventory.CurrentStock <= inventory.MinAlertThreshold)
+                {
+                    await _notificationService.NotifyLowStockAlertAsync(new LowStockAlertNotification(
+                        request.StoreId,
+                        request.IngredientId,
+                        ingredient.Code,
+                        ingredient.Name,
+                        ingredient.Unit,
+                        inventory.CurrentStock,
+                        inventory.MinAlertThreshold,
+                        inventory.MinAlertThreshold - inventory.CurrentStock,
+                        DateTime.UtcNow), ct);
+                }
+            }
+            catch
+            {
+                // Ignore real-time broadcast exception
+            }
+        }
+
+        return new RecordWasteResponse(
+            request.StoreId,
+            request.IngredientId,
+            ingredient.Name,
+            request.Quantity,
+            inventory.CurrentStock,
+            transaction.Note,
+            DateTime.UtcNow
+        );
+    }
+
+    public async Task<bool> UpdateStoreAlertConfigAsync(
+        Guid storeId, 
+        UpdateStoreAlertConfigRequest request, 
+        CancellationToken ct = default)
+    {
+        var store = await _context.Stores.FirstOrDefaultAsync(s => s.Id == storeId, ct)
+            ?? throw new NotFoundException("STORE_NOT_FOUND", $"Không tìm thấy chi nhánh với ID '{storeId}'.");
+
+        store.ManagerEmail = request.ManagerEmail;
+        store.TelegramChatId = request.TelegramChatId;
+        await _context.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<AlertBroadcastResultDto> BroadcastLowStockAlertsAsync(
+        Guid storeId, 
+        BroadcastStockAlertRequest? request = null, 
+        CancellationToken ct = default)
+    {
+        var store = await _context.Stores
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == storeId, ct)
+            ?? throw new NotFoundException("STORE_NOT_FOUND", $"Không tìm thấy chi nhánh với ID '{storeId}'.");
+
+        var lowStockItems = await GetLowStockAlertsAsync(storeId, ct);
+
+        var telegramChatId = !string.IsNullOrWhiteSpace(request?.CustomTelegramChatId) 
+            ? request.CustomTelegramChatId 
+            : (!string.IsNullOrWhiteSpace(store.TelegramChatId) ? store.TelegramChatId : _configuration?["Telegram:DefaultChatId"]);
+
+        var managerEmail = !string.IsNullOrWhiteSpace(request?.CustomManagerEmail)
+            ? request.CustomManagerEmail
+            : store.ManagerEmail;
+
+        bool telegramSent = false;
+        string? telegramStatus = null;
+        if (!string.IsNullOrWhiteSpace(telegramChatId) && _telegramService != null)
+        {
+            var teleResult = await _telegramService.SendLowStockAlertAsync(telegramChatId, store.Name, lowStockItems, ct);
+            telegramSent = teleResult.IsSuccess;
+            telegramStatus = teleResult.Message;
+        }
+        else
+        {
+            telegramStatus = "Chưa cấu hình Telegram Chat ID";
+        }
+
+        bool emailSent = false;
+        string? emailStatus = null;
+        if (!string.IsNullOrWhiteSpace(managerEmail) && _emailService != null)
+        {
+            try
+            {
+                await _emailService.SendBatchLowStockAlertEmailAsync(managerEmail, store.Name, lowStockItems, ct);
+                emailSent = true;
+                emailStatus = $"Đã gửi email cảnh báo tới {managerEmail}";
+            }
+            catch (Exception ex)
+            {
+                emailStatus = $"Lỗi gửi email: {ex.Message}";
+            }
+        }
+        else
+        {
+            emailStatus = "Chưa cấu hình Email Quản lý chi nhánh";
+        }
+
+        return new AlertBroadcastResultDto(
+            store.Id,
+            store.Name,
+            lowStockItems.Count,
+            lowStockItems,
+            telegramSent,
+            telegramStatus,
+            emailSent,
+            emailStatus,
+            DateTime.UtcNow
         );
     }
 }

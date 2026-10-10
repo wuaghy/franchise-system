@@ -23,4 +23,21 @@ public interface IInventoryService
     Task<StoreInventoryResponse> InboundStockAsync(
         InboundStockRequest request, 
         CancellationToken ct = default);
+
+    // Khai báo xuất hủy hao hụt, rơi vỡ, hư hỏng nguyên liệu
+    Task<RecordWasteResponse> RecordWasteAsync(
+        RecordWasteRequest request, 
+        CancellationToken ct = default);
+
+    // Kích hoạt phát cảnh báo tồn kho tới Telegram Bot và Email Quản lý
+    Task<AlertBroadcastResultDto> BroadcastLowStockAlertsAsync(
+        Guid storeId, 
+        BroadcastStockAlertRequest? request = null, 
+        CancellationToken ct = default);
+
+    // Cập nhật cấu hình Telegram Chat ID và Email Quản lý của chi nhánh
+    Task<bool> UpdateStoreAlertConfigAsync(
+        Guid storeId, 
+        UpdateStoreAlertConfigRequest request, 
+        CancellationToken ct = default);
 }

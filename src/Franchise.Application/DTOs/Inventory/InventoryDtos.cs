@@ -56,7 +56,10 @@ public record LowStockAlertResponse(
     decimal CurrentStock,
     decimal MinAlertThreshold,
     decimal Shortage
-);
+)
+{
+    public decimal Deficit => Shortage;
+}
 
 // Nhập kho
 public record InboundStockRequest(
@@ -65,3 +68,47 @@ public record InboundStockRequest(
     decimal Quantity,
     string? Note = null
 );
+
+// Khai báo xuất hủy hao hụt / rơi vỡ / hư hỏng nguyên liệu
+public record RecordWasteRequest(
+    Guid StoreId,
+    Guid IngredientId,
+    decimal Quantity,
+    string Reason
+);
+
+public record RecordWasteResponse(
+    Guid StoreId,
+    Guid IngredientId,
+    string IngredientName,
+    decimal QuantityWasted,
+    decimal RemainingStock,
+    string Reason,
+    DateTime RecordedAt
+);
+
+// Cấu hình thông báo cảnh báo của chi nhánh
+public record UpdateStoreAlertConfigRequest(
+    string? ManagerEmail,
+    string? TelegramChatId
+);
+
+// Yêu cầu phát cảnh báo khẩn cấp
+public record BroadcastStockAlertRequest(
+    string? CustomTelegramChatId = null,
+    string? CustomManagerEmail = null
+);
+
+// Kết quả phát cảnh báo
+public record AlertBroadcastResultDto(
+    Guid StoreId,
+    string StoreName,
+    int AlertCount,
+    List<LowStockAlertResponse> LowStockItems,
+    bool TelegramSent,
+    string? TelegramStatus,
+    bool EmailSent,
+    string? EmailStatus,
+    DateTime SentAt
+);
+

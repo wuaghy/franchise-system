@@ -87,4 +87,55 @@ public class InventoryController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Ghi nhận xuất hủy nguyên liệu (rơi vỡ, hư hỏng, hết hạn, hao hụt pha chế)
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("waste")]
+    [ProducesResponseType(typeof(RecordWasteResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RecordWaste(Guid storeId, [FromBody] RecordWasteRequest request, CancellationToken ct)
+    {
+        if (storeId != request.StoreId)
+        {
+            throw new RequestValidationException("storeId", "StoreId trong URL và Body không trùng khớp.");
+        }
+
+        var result = await _inventoryService.RecordWasteAsync(request, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Kích hoạt phát cảnh báo tồn kho tới Telegram Bot và Email Quản lý cửa hàng
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("alerts/broadcast")]
+    [ProducesResponseType(typeof(AlertBroadcastResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> BroadcastLowStockAlerts(
+        Guid storeId, 
+        [FromBody] BroadcastStockAlertRequest? request, 
+        CancellationToken ct)
+    {
+        var result = await _inventoryService.BroadcastLowStockAlertsAsync(storeId, request, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Cập nhật cấu hình Telegram Chat ID và Email Quản lý của chi nhánh
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPut("alerts/config")]
+    [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateAlertConfig(
+        Guid storeId, 
+        [FromBody] UpdateStoreAlertConfigRequest request, 
+        CancellationToken ct)
+    {
+        var result = await _inventoryService.UpdateStoreAlertConfigAsync(storeId, request, ct);
+        return Ok(result);
+    }
 }

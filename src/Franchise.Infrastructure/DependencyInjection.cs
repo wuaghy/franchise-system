@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<Franchise.Application.Common.Interfaces.IPaymentWebhookService, Services.PaymentWebhookService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IShiftService, Services.ShiftService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.ILoyaltyService, Services.LoyaltyService>();
+        services.AddHttpClient<Franchise.Application.Common.Interfaces.ITelegramService, Services.TelegramService>();
         services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;

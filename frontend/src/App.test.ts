@@ -763,6 +763,73 @@ describe('Franchise Frontend Enterprise Suite', () => {
     const pointsEarned = Math.floor(finalAmount / 10000);
     assert.equal(pointsEarned, 24);
   });
+
+  it('calculates peak hours staffing recommendation dynamically based on order volume', () => {
+    const calculateStaffing = (orderCount: number, isPeakHour: boolean) => {
+      if (isPeakHour || orderCount >= 30) return 4;
+      if (orderCount >= 15) return 3;
+      if (orderCount >= 5) return 2;
+      return 1;
+    };
+
+    assert.equal(calculateStaffing(35, true), 4);
+    assert.equal(calculateStaffing(10, true), 4);
+    assert.equal(calculateStaffing(25, false), 3);
+    assert.equal(calculateStaffing(12, false), 2);
+    assert.equal(calculateStaffing(3, false), 1);
+  });
+
+  it('classifies Menu Engineering BCG matrix correctly (Star, Plowhorse, Puzzle, Dog)', () => {
+    const classifyMenuProduct = (
+      quantity: number,
+      unitMargin: number,
+      avgQty: number,
+      avgMargin: number
+    ): 'Star' | 'Plowhorse' | 'Puzzle' | 'Dog' => {
+      const isHighPopularity = quantity >= avgQty;
+      const isHighProfit = unitMargin >= avgMargin;
+
+      if (isHighPopularity && isHighProfit) return 'Star';
+      if (isHighPopularity && !isHighProfit) return 'Plowhorse';
+      if (!isHighPopularity && isHighProfit) return 'Puzzle';
+      return 'Dog';
+    };
+
+    const avgQty = 50;
+    const avgMargin = 25000;
+
+    // Star: High volume, High profit margin
+    assert.equal(classifyMenuProduct(80, 35000, avgQty, avgMargin), 'Star');
+    // Plowhorse: High volume, Low profit margin
+    assert.equal(classifyMenuProduct(100, 15000, avgQty, avgMargin), 'Plowhorse');
+    // Puzzle: Low volume, High profit margin
+    assert.equal(classifyMenuProduct(20, 40000, avgQty, avgMargin), 'Puzzle');
+    // Dog: Low volume, Low profit margin
+    assert.equal(classifyMenuProduct(15, 12000, avgQty, avgMargin), 'Dog');
+  });
+
+  it('computes inventory waste and shrinkage rate correctly', () => {
+    const computeShrinkage = (theoreticalUsage: number, wastedQuantity: number, standardCost: number) => {
+      const totalInput = theoreticalUsage + wastedQuantity;
+      const shrinkageRate = totalInput > 0 ? (wastedQuantity / totalInput) * 100 : 0;
+      const totalCostLoss = wastedQuantity * standardCost;
+
+      return {
+        shrinkageRate: Math.round(shrinkageRate * 100) / 100,
+        totalCostLoss,
+      };
+    };
+
+    // Example: 90kg used theoretically, 10kg spoiled/wasted, cost = 120,000 VND/kg
+    const result = computeShrinkage(90, 10, 120000);
+    assert.equal(result.shrinkageRate, 10.0); // 10 / (90 + 10) * 100 = 10%
+    assert.equal(result.totalCostLoss, 1200000);
+
+    // Edge case: 0 waste
+    const zeroWaste = computeShrinkage(100, 0, 50000);
+    assert.equal(zeroWaste.shrinkageRate, 0);
+    assert.equal(zeroWaste.totalCostLoss, 0);
+  });
 });
 
 

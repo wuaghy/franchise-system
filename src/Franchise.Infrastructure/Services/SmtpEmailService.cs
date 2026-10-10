@@ -186,4 +186,75 @@ public class SmtpEmailService : IEmailService
 
         await SendEmailAsync(toEmail, subject, htmlBody, ct);
     }
+
+    public async Task SendBatchLowStockAlertEmailAsync(
+        string toEmail, 
+        string storeName, 
+        List<Franchise.Application.DTOs.Inventory.LowStockAlertResponse> items, 
+        CancellationToken ct = default)
+    {
+        if (items == null || !items.Any()) return;
+
+        var subject = $"🚨 [CẢNH BÁO TỒN KHO KHẨN CẤP] {storeName}: {items.Count} nguyên liệu chạm ngưỡng báo động đỏ!";
+
+        var rowsHtml = string.Join("", items.Select(i => $@"
+            <tr style='border-bottom: 1px solid #fee2e2;'>
+                <td style='padding: 10px; font-weight: 600;'>{i.IngredientCode}</td>
+                <td style='padding: 10px;'>{i.IngredientName}</td>
+                <td style='padding: 10px; color: #dc2626; font-weight: 700;'>{i.CurrentStock:N2} {i.Unit}</td>
+                <td style='padding: 10px;'>{i.MinAlertThreshold:N2} {i.Unit}</td>
+                <td style='padding: 10px; color: #b91c1c; font-weight: 700;'>+{i.Deficit:N2} {i.Unit}</td>
+            </tr>"));
+
+        var htmlBody = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; padding: 24px; }}
+        .card {{ max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #fecaca; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }}
+        .header {{ background: linear-gradient(135deg, #b91c1c, #991b1b); padding: 24px; color: #ffffff; text-align: center; }}
+        .content {{ padding: 24px; font-size: 14px; color: #334155; }}
+        .table {{ width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }}
+        th {{ background: #fef2f2; color: #991b1b; padding: 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #fca5a5; }}
+        .footer {{ background: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; }}
+    </style>
+</head>
+<body>
+    <div class='card'>
+        <div class='header'>
+            <h2 style='margin:0; font-size: 20px;'>🚨 CẢNH BÁO TỒN KHO NGUY CẤP</h2>
+            <p style='margin: 4px 0 0 0; opacity: 0.9; font-size: 13px;'>Hệ thống Cảnh báo Tồn kho Chuỗi Nhượng quyền F&B</p>
+        </div>
+        <div class='content'>
+            <p>Kính gửi Quản lý chi nhánh: <strong style='font-size: 15px;'>{storeName}</strong>,</p>
+            <p>Hệ thống ghi nhận có <b style='color:#dc2626;'>{items.Count} nguyên liệu</b> đang dưới hoặc chạm ngưỡng an toàn tối thiểu:</p>
+            
+            <table class='table'>
+                <thead>
+                    <tr>
+                        <th>Mã</th>
+                        <th>Nguyên liệu</th>
+                        <th>Tồn kho</th>
+                        <th>Ngưỡng</th>
+                        <th>Thiếu hụt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rowsHtml}
+                </tbody>
+            </table>
+
+            <p style='margin-top: 20px;'>⚠️ <strong>Khuyến nghị hành động:</strong> Vui lòng truy cập Cổng Chuỗi Cung ứng (Supply Chain Portal) để tạo ngay <b>Yêu cầu nhập kho / Điều chuyển kho (Stock Transfer)</b> từ Tổng công ty nhằm đảm bảo công suất pha chế không bị gián đoạn.</p>
+        </div>
+        <div class='footer'>
+            Thông báo tự động từ Hệ thống Quản trị Chuỗi F&B Enterprise • Thời gian: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC
+        </div>
+    </div>
+</body>
+</html>";
+
+        await SendEmailAsync(toEmail, subject, htmlBody, ct);
+    }
 }

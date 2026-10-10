@@ -64,3 +64,57 @@ public record NetworkOverviewDto(
     decimal TotalRoyaltyDue,
     List<NetworkStoreComparisonDto> StoreRankings
 );
+
+public record AdvancedPeakHoursAnalysisDto(
+    Guid StoreId,
+    string StoreName,
+    DateTime Date,
+    int TotalOrders,
+    decimal TotalRevenue,
+    int PeakHourOrderCount,
+    decimal PeakHourRevenue,
+    int BusiestHour,
+    string BusiestHourRange,
+    int RecommendedStaffingOnPeak,
+    int RecommendedStaffingOffPeak,
+    List<HourlySalesPointDto> HourlyDistribution
+);
+
+public record WasteItemDetailDto(
+    Guid IngredientId,
+    string IngredientCode,
+    string IngredientName,
+    string Unit,
+    decimal TheoreticalUsage,
+    decimal WastedQuantity,
+    decimal UnitCost,
+    decimal TotalWasteCost,
+    decimal ShrinkageRatePercentage,
+    string Status // "Normal" (<2%), "Warning" (2-5%), "Critical" (>5%)
+);
+
+public record WasteShrinkageReportDto(
+    Guid StoreId,
+    string StoreName,
+    DateTime FromDate,
+    DateTime ToDate,
+    decimal TotalTheoreticalUsage,
+    decimal TotalWastedQuantity,
+    decimal TotalWasteCost,
+    decimal OverallShrinkageRatePercentage,
+    string HealthRating, // "Tốt (<2%)", "Cần lưu ý (2-5%)", "Báo động (>5%)"
+    List<WasteItemDetailDto> Items
+);
+
+public record TopSellerItemDto(
+    Guid ProductId,
+    string ProductName,
+    string Sku,
+    int UnitsSold,
+    decimal Revenue,
+    decimal EstimatedProfit,
+    decimal MarginPercentage,
+    decimal RevenueSharePercentage,
+    string MenuClassification // "Star", "Plowhorse", "Puzzle", "Dog"
+);
+

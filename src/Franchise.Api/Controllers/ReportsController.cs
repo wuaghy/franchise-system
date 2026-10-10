@@ -87,4 +87,55 @@ public class ReportsController : ControllerBase
         var result = await _analyticsService.GetNetworkOverviewAsync(fromDate, toDate, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Báo cáo phân tích chuyên sâu khung giờ vàng bán chạy (Peak Hours) và định biên nhân sự ca làm việc.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("stores/{storeId:guid}/peak-hours")]
+    [ProducesResponseType(typeof(AdvancedPeakHoursAnalysisDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPeakHoursAnalysis(
+        [FromRoute] Guid storeId,
+        [FromQuery] DateTime? date,
+        CancellationToken ct)
+    {
+        var result = await _analyticsService.GetAdvancedPeakHoursAnalysisAsync(storeId, date, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Báo cáo món bán chạy nhất phân loại theo Ma trận Kỹ nghệ Thực đơn F&B (Star, Plowhorse, Puzzle, Dog).
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("stores/{storeId:guid}/top-sellers")]
+    [ProducesResponseType(typeof(List<TopSellerItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTopSellers(
+        [FromRoute] Guid storeId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        [FromQuery] int top = 10,
+        CancellationToken ct = default)
+    {
+        var result = await _analyticsService.GetTopSellersMenuEngineeringAsync(storeId, fromDate, toDate, top, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Báo cáo phân tích tỷ lệ hao hụt nguyên liệu (Waste/Shrinkage Rate) và chi phí thất thoát.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("stores/{storeId:guid}/waste-shrinkage")]
+    [ProducesResponseType(typeof(WasteShrinkageReportDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWasteShrinkageReport(
+        [FromRoute] Guid storeId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        CancellationToken ct)
+    {
+        var result = await _analyticsService.GetWasteShrinkageReportAsync(storeId, fromDate, toDate, ct);
+        return Ok(result);
+    }
 }

@@ -340,6 +340,47 @@ export const api = {
     const params = phoneNumber ? `?phoneNumber=${encodeURIComponent(phoneNumber)}` : '';
     return fetchJson(`${API_BASE}/loyalty/vouchers${params}`);
   },
+
+  async getPeakHoursAnalysis(storeId: string, date?: string): Promise<AdvancedPeakHoursAnalysis> {
+    const params = date ? `?date=${encodeURIComponent(date)}` : '';
+    return fetchJson(`${API_BASE}/reports/stores/${storeId}/peak-hours${params}`);
+  },
+
+  async getTopSellers(storeId: string, fromDate?: string, toDate?: string, top = 10): Promise<TopSellerItem[]> {
+    const params = new URLSearchParams();
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+    params.append('top', top.toString());
+    return fetchJson(`${API_BASE}/reports/stores/${storeId}/top-sellers?${params.toString()}`);
+  },
+
+  async getWasteShrinkageReport(storeId: string, fromDate?: string, toDate?: string): Promise<WasteShrinkageReport> {
+    const params = new URLSearchParams();
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+    return fetchJson(`${API_BASE}/reports/stores/${storeId}/waste-shrinkage?${params.toString()}`);
+  },
+
+  async recordWaste(storeId: string, payload: RecordWastePayload): Promise<RecordWasteResponse> {
+    return fetchJson(`${API_BASE}/stores/${storeId}/inventory/waste`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async broadcastLowStockAlerts(storeId: string, payload?: BroadcastAlertPayload): Promise<AlertBroadcastResult> {
+    return fetchJson(`${API_BASE}/stores/${storeId}/inventory/alerts/broadcast`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  async updateStoreAlertConfig(storeId: string, payload: UpdateStoreAlertConfigPayload): Promise<boolean> {
+    return fetchJson(`${API_BASE}/stores/${storeId}/inventory/alerts/config`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export interface CustomerData {
@@ -461,5 +502,105 @@ export interface ZReportData {
   notes?: string;
   movements: ShiftCashMovement[];
 }
+
+export interface HourlySalesPoint {
+  hour: number;
+  orderCount: number;
+  revenue: number;
+  isPeakHour: boolean;
+}
+
+export interface AdvancedPeakHoursAnalysis {
+  storeId: string;
+  storeName: string;
+  date: string;
+  totalOrders: number;
+  totalRevenue: number;
+  peakHourOrderCount: number;
+  peakHourRevenue: number;
+  busiestHour: number;
+  busiestHourRange: string;
+  recommendedStaffingOnPeak: number;
+  recommendedStaffingOffPeak: number;
+  hourlyDistribution: HourlySalesPoint[];
+}
+
+export interface TopSellerItem {
+  productId: string;
+  productName: string;
+  sku: string;
+  unitsSold: number;
+  revenue: number;
+  estimatedProfit: number;
+  marginPercentage: number;
+  revenueSharePercentage: number;
+  menuClassification: 'Star' | 'Plowhorse' | 'Puzzle' | 'Dog';
+}
+
+export interface WasteItemDetail {
+  ingredientId: string;
+  ingredientCode: string;
+  ingredientName: string;
+  unit: string;
+  theoreticalUsage: number;
+  wastedQuantity: number;
+  unitCost: number;
+  totalWasteCost: number;
+  shrinkageRatePercentage: number;
+  status: 'Normal' | 'Warning' | 'Critical';
+}
+
+export interface WasteShrinkageReport {
+  storeId: string;
+  storeName: string;
+  fromDate: string;
+  toDate: string;
+  totalTheoreticalUsage: number;
+  totalWastedQuantity: number;
+  totalWasteCost: number;
+  overallShrinkageRatePercentage: number;
+  healthRating: string;
+  items: WasteItemDetail[];
+}
+
+export interface RecordWastePayload {
+  storeId: string;
+  ingredientId: string;
+  quantity: number;
+  reason: string;
+}
+
+export interface RecordWasteResponse {
+  storeId: string;
+  ingredientId: string;
+  ingredientName: string;
+  quantityWasted: number;
+  remainingStock: number;
+  reason: string;
+  recordedAt: string;
+}
+
+export interface UpdateStoreAlertConfigPayload {
+  managerEmail?: string;
+  telegramChatId?: string;
+}
+
+export interface BroadcastAlertPayload {
+  customTelegramChatId?: string;
+  customManagerEmail?: string;
+}
+
+export interface AlertBroadcastResult {
+  storeId: string;
+  storeName: string;
+  alertCount: number;
+  lowStockItems: LowStockAlert[];
+  telegramSent: boolean;
+  telegramStatus?: string;
+  emailSent: boolean;
+  emailStatus?: string;
+  sentAt: string;
+}
+
 
 

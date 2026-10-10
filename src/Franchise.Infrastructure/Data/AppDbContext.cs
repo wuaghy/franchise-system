@@ -80,6 +80,8 @@ public class AppDbContext : DbContext
             b.Property(e => e.Name).IsRequired().HasMaxLength(200);
             b.Property(e => e.Address).HasMaxLength(500);
             b.Property(e => e.PhoneNumber).HasMaxLength(20);
+            b.Property(e => e.ManagerEmail).HasMaxLength(200);
+            b.Property(e => e.TelegramChatId).HasMaxLength(100);
             b.Property(e => e.Latitude).HasPrecision(9, 6);
             b.Property(e => e.Longitude).HasPrecision(9, 6);
 

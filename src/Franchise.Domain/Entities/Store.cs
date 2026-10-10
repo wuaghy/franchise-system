@@ -13,6 +13,8 @@ public class Store : BaseEntity
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
     public string PhoneNumber { get; set; } = string.Empty;
+    public string? ManagerEmail { get; set; }
+    public string? TelegramChatId { get; set; }
     public TimeSpan? OpeningTime { get; set; }
     public TimeSpan? ClosingTime { get; set; }
     public bool IsActive { get; set; } = true;
