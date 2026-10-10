@@ -21,4 +21,11 @@ public interface ISupplyChainService
     Task<List<WarehouseDto>> GetWarehousesAsync(CancellationToken cancellationToken = default);
     Task<List<WarehouseInventoryDto>> GetWarehouseInventoryAsync(Guid warehouseId, CancellationToken cancellationToken = default);
     Task<List<WarehouseInventoryDto>> InboundWarehouseStockAsync(WarehouseInboundRequest request, Guid currentUserId, CancellationToken cancellationToken = default);
+
+    // Tự động Đề Xuất Đặt Hàng & Dự Trù Tồn Kho (Auto-Reorder Suggestions)
+    Task<AutoReorderSuggestionResponse> GetAutoReorderSuggestionsAsync(
+        Guid storeId, 
+        int planningDays = 7, 
+        int leadTimeDays = 2, 
+        CancellationToken cancellationToken = default);
 }

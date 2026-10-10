@@ -20,6 +20,9 @@ import {
   Truck,
   X,
   XCircle,
+  Sparkles,
+  ShoppingCart,
+  TrendingDown,
 } from "lucide-react";
 import {
   getTransferOrders,
@@ -41,7 +44,7 @@ import {
 } from "../services/transfers.ts";
 import { type User } from "../services/auth.ts";
 import { costingApi, type IngredientItem } from "../services/costing.ts";
-import { api } from "../services/api.ts";
+import { api, type AutoReorderSuggestionResponse } from "../services/api.ts";
 
 export interface TransferStoreOption {
   id: string;
@@ -123,7 +126,7 @@ export interface TransfersHubScreenProps {
 }
 
 export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubScreenProps) {
-  const [activeTab, setActiveTab] = useState<"transfers" | "warehouse">("transfers");
+  const [activeTab, setActiveTab] = useState<"transfers" | "warehouse" | "suggestions">("transfers");
   const [orders, setOrders] = useState<StockTransferOrderDto[]>([]);
   const [stores, setStores] = useState<TransferStoreOption[]>(defaultTransferStores);
   const [warehouses, setWarehouses] = useState<WarehouseDto[]>(initialMockWarehouses);
@@ -162,6 +165,14 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
   const [inboundIngId, setInboundIngId] = useState("44444444-4444-4444-4444-444444444441");
   const [inboundQty, setInboundQty] = useState(50000);
   const [inboundCost, setInboundCost] = useState(80);
+
+  // Auto-Reorder & PO Suggestions
+  const [suggestionsStoreId, setSuggestionsStoreId] = useState("22222222-2222-2222-2222-222222222222");
+  const [planningHorizonDays, setPlanningHorizonDays] = useState(7);
+  const [leadTimeDays, setLeadTimeDays] = useState(2);
+  const [reorderSuggestions, setReorderSuggestions] = useState<AutoReorderSuggestionResponse | null>(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [selectedSuggestionItems, setSelectedSuggestionItems] = useState<{ [ingId: string]: boolean }>({});
 
   // Load data
   const loadData = async () => {
@@ -365,6 +376,56 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
     }
   };
 
+  const fetchSuggestions = async (storeId = suggestionsStoreId, planDays = planningHorizonDays, ltDays = leadTimeDays) => {
+    try {
+      setSuggestionsLoading(true);
+      const res = await api.getAutoReorderSuggestions(storeId, planDays, ltDays);
+      setReorderSuggestions(res);
+      // Default: select items with RecommendedOrderQuantity > 0
+      const initialSelected: { [ingId: string]: boolean } = {};
+      res.suggestions.forEach((item) => {
+        if (item.recommendedOrderQuantity > 0) {
+          initialSelected[item.ingredientId] = true;
+        }
+      });
+      setSelectedSuggestionItems(initialSelected);
+    } catch (err: any) {
+      alert("Không thể tải gợi ý đề xuất đặt hàng: " + err.message);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  const handleCreatePoFromSuggestions = async () => {
+    if (!reorderSuggestions || !warehouses.length) return;
+    const selectedList = reorderSuggestions.suggestions.filter(
+      (item) => selectedSuggestionItems[item.ingredientId] && item.recommendedOrderQuantity > 0
+    );
+    if (selectedList.length === 0) {
+      alert("Vui lòng chọn ít nhất 1 mặt hàng có lượng đặt > 0.");
+      return;
+    }
+    try {
+      setLoading(true);
+      await createTransferOrder({
+        sourceWarehouseId: reorderSuggestions.recommendedWarehouseId || warehouses[0].id,
+        destinationStoreId: suggestionsStoreId,
+        notes: `Auto-PO: Tự động đề xuất đặt hàng theo chu kỳ ${planningHorizonDays} ngày (+ Lead time ${leadTimeDays} ngày)`,
+        items: selectedList.map((item) => ({
+          ingredientId: item.ingredientId,
+          requestedQuantity: Math.ceil(item.recommendedOrderQuantity),
+        })),
+      });
+      alert(`Đã khởi tạo thành công đơn đề xuất STO gồm ${selectedList.length} mặt hàng!`);
+      setActiveTab("transfers");
+      await loadData();
+    } catch (err: any) {
+      alert("Lỗi khi tạo đơn STO từ đề xuất: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   function renderStatusBadge(status: TransferStatus) {
     switch (status) {
       case "Draft":
@@ -471,6 +532,24 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
           }`}
         >
           <Building2 size={16} /> Tồn Kho Tổng Trung Tâm HQ (Central Warehouse)
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("suggestions");
+            if (!reorderSuggestions) {
+              fetchSuggestions();
+            }
+          }}
+          className={`flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-bold transition ${
+            activeTab === "suggestions" ? "border-red-800 text-red-800" : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <Sparkles size={16} className="text-amber-500" /> ✨ Tự Động Đề Xuất Đặt Hàng (Auto-PO)
+          {reorderSuggestions && reorderSuggestions.itemsNeedingReorderCount > 0 && (
+            <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black text-white">
+              {reorderSuggestions.itemsNeedingReorderCount} cần đặt
+            </span>
+          )}
         </button>
       </div>
 
@@ -694,6 +773,252 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: AUTO-PO & REORDER SUGGESTIONS */}
+      {activeTab === "suggestions" && (
+        <div className="space-y-5">
+          {/* Controls Bar */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                  <Sparkles size={13} /> F&B Smart Demand Forecasting
+                </span>
+                <h3 className="text-lg font-black text-slate-900">
+                  Dự Trù & Đề Xuất Đặt Hàng Thông Minh (Auto-PO)
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Phân tích lịch sử xuất bán 14 ngày, tính tốc độ tiêu hao/ngày kết hợp số ngày dự trù và thời gian giao hàng (Lead Time).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchSuggestions(suggestionsStoreId, planningHorizonDays, leadTimeDays)}
+                  disabled={suggestionsLoading}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition disabled:opacity-50"
+                >
+                  <RefreshCcw size={14} className={suggestionsLoading ? "animate-spin text-amber-600" : ""} />
+                  {suggestionsLoading ? "Đang tính toán..." : "Tính Lại Dự Báo"}
+                </button>
+                <button
+                  onClick={handleCreatePoFromSuggestions}
+                  disabled={suggestionsLoading || !reorderSuggestions || reorderSuggestions.suggestions.filter(i => selectedSuggestionItems[i.ingredientId] && i.recommendedOrderQuantity > 0).length === 0}
+                  className="inline-flex items-center gap-2 rounded-xl bg-red-800 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ShoppingCart size={15} /> 1-Click Tạo Đơn STO Tự Động
+                </button>
+              </div>
+            </div>
+
+            {/* Filter / Param Inputs */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Cửa hàng cần dự trù tồn kho:</label>
+                <select
+                  value={suggestionsStoreId}
+                  onChange={(e) => {
+                    setSuggestionsStoreId(e.target.value);
+                    fetchSuggestions(e.target.value, planningHorizonDays, leadTimeDays);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 p-2 text-xs font-semibold outline-none focus:border-red-800"
+                >
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Chu kỳ kế hoạch dự trù (Ngày):</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={planningHorizonDays}
+                  onChange={(e) => setPlanningHorizonDays(Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-200 p-2 text-xs font-semibold outline-none focus:border-red-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Thời gian giao hàng Lead Time (Ngày):</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={14}
+                  value={leadTimeDays}
+                  onChange={(e) => setLeadTimeDays(Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-200 p-2 text-xs font-semibold outline-none focus:border-red-800"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Suggestions Summary Banner */}
+          {reorderSuggestions && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
+                <div className="text-[11px] font-black uppercase text-rose-700">Mặt hàng cấp bách (Critical)</div>
+                <div className="mt-1 text-2xl font-black text-rose-900">
+                  {reorderSuggestions.suggestions.filter(s => s.priority === "Critical").length} NL
+                </div>
+                <p className="text-[11px] text-rose-600 mt-0.5">Tồn kho âm hoặc đã cạn kiệt đáy kho</p>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                <div className="text-[11px] font-black uppercase text-amber-700">Cảnh báo chạm ngưỡng (Warning)</div>
+                <div className="mt-1 text-2xl font-black text-amber-900">
+                  {reorderSuggestions.suggestions.filter(s => s.priority === "Warning").length} NL
+                </div>
+                <p className="text-[11px] text-amber-600 mt-0.5">Dưới ngưỡng an toàn, nguy cơ thiếu nguyên liệu</p>
+              </div>
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4">
+                <div className="text-[11px] font-black uppercase text-blue-700">Tổng chi phí dự toán (Est. Cost)</div>
+                <div className="mt-1 text-2xl font-black text-blue-900">
+                  {reorderSuggestions.suggestions
+                    .filter((i) => selectedSuggestionItems[i.ingredientId])
+                    .reduce((sum, i) => sum + i.estimatedTotalCost, 0)
+                    .toLocaleString()}₫
+                </div>
+                <p className="text-[11px] text-blue-600 mt-0.5">Dựa trên đơn giá tiêu chuẩn kho tổng</p>
+              </div>
+            </div>
+          )}
+
+          {/* Table */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="select-all-suggestions"
+                  checked={
+                    reorderSuggestions?.suggestions.filter((i) => i.recommendedOrderQuantity > 0).length
+                      ? reorderSuggestions.suggestions
+                          .filter((i) => i.recommendedOrderQuantity > 0)
+                          .every((i) => selectedSuggestionItems[i.ingredientId])
+                      : false
+                  }
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    const map: { [id: string]: boolean } = {};
+                    reorderSuggestions?.suggestions.forEach((i) => {
+                      if (i.recommendedOrderQuantity > 0) {
+                        map[i.ingredientId] = checked;
+                      }
+                    });
+                    setSelectedSuggestionItems(map);
+                  }}
+                  className="rounded text-red-800 focus:ring-red-800"
+                />
+                <label htmlFor="select-all-suggestions" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  Chọn tất cả các món cần đặt hàng
+                </label>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-400">
+                {reorderSuggestions?.suggestions.length || 0} nguyên liệu được phân tích
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4 w-10 text-center">Chọn</th>
+                    <th className="py-3 px-4">Mã NL</th>
+                    <th className="py-3 px-4">Tên nguyên liệu</th>
+                    <th className="py-3 px-4">Đơn vị</th>
+                    <th className="py-3 px-4 text-right">Tồn hiện tại</th>
+                    <th className="py-3 px-4 text-right">Tiêu hao / ngày</th>
+                    <th className="py-3 px-4 text-right">Mức tối thiểu</th>
+                    <th className="py-3 px-4 text-right font-black text-red-900">Đề xuất đặt (Auto-PO)</th>
+                    <th className="py-3 px-4 text-right">Dự toán chi phí</th>
+                    <th className="py-3 px-4 text-center">Mức ưu tiên</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {reorderSuggestions && reorderSuggestions.suggestions.length > 0 ? (
+                    reorderSuggestions.suggestions.map((item) => {
+                      const isSelected = !!selectedSuggestionItems[item.ingredientId];
+                      const isReorderNeeded = item.recommendedOrderQuantity > 0;
+                      return (
+                        <tr
+                          key={item.ingredientId}
+                          className={`hover:bg-slate-50/60 transition ${
+                            isSelected && isReorderNeeded ? "bg-amber-50/30" : ""
+                          }`}
+                        >
+                          <td className="py-3 px-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              disabled={!isReorderNeeded}
+                              onChange={(e) => {
+                                setSelectedSuggestionItems({
+                                  ...selectedSuggestionItems,
+                                  [item.ingredientId]: e.target.checked,
+                                });
+                              }}
+                              className="rounded text-red-800 focus:ring-red-800 disabled:opacity-30"
+                            />
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900">{item.ingredientCode}</td>
+                          <td className="py-3 px-4 font-bold text-slate-900">{item.ingredientName}</td>
+                          <td className="py-3 px-4 text-slate-500">{item.unit}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-800 text-right">
+                            {item.currentStock.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-600 text-right">
+                            {item.averageDailyConsumption.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-600 text-right">
+                            {item.minAlertThreshold.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 font-mono font-black text-red-800 text-right text-sm">
+                            {item.recommendedOrderQuantity > 0 ? (
+                              `+${item.recommendedOrderQuantity.toLocaleString()}`
+                            ) : (
+                              <span className="text-slate-400 font-normal">0</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-800 text-right">
+                            {item.estimatedTotalCost.toLocaleString()}₫
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {item.priority === "Critical" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-800 ring-1 ring-rose-600/20">
+                                🚨 Khẩn cấp
+                              </span>
+                            )}
+                            {item.priority === "Warning" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-amber-600/20">
+                                ⚠️ Cảnh báo
+                              </span>
+                            )}
+                            {item.priority === "Normal" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                ✓ Ổn định
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={10} className="py-12 text-center text-slate-400">
+                        {suggestionsLoading ? "Đang tính toán đề xuất..." : "Chưa có dữ liệu đề xuất hoặc không có nguyên liệu."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

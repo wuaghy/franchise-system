@@ -520,6 +520,142 @@ public class SupplyChainService : ISupplyChainService
         return await GetWarehouseInventoryAsync(request.WarehouseId, ct);
     }
 
+    public async Task<AutoReorderSuggestionResponse> GetAutoReorderSuggestionsAsync(
+        Guid storeId,
+        int planningDays = 7,
+        int leadTimeDays = 2,
+        CancellationToken ct = default)
+    {
+        if (planningDays <= 0) planningDays = 7;
+        if (leadTimeDays < 0) leadTimeDays = 2;
+
+        var store = await _context.Stores
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == storeId, ct)
+            ?? throw new NotFoundException("STORE_NOT_FOUND", $"Không tìm thấy chi nhánh với ID '{storeId}'.");
+
+        // Chọn Kho phân phối mặc định (hoặc kho đầu tiên có sẵn)
+        var defaultWarehouse = await _context.Warehouses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ct)
+            ?? new Warehouse { Id = Guid.NewGuid(), Name = "Kho Tổng Trung Tâm (HQ Central Hub)" };
+
+        // 1. Lấy tồn kho hiện tại của chi nhánh
+        var storeInventories = await _context.StoreInventories
+            .AsNoTracking()
+            .Include(si => si.Ingredient)
+            .Where(si => si.StoreId == storeId)
+            .ToListAsync(ct);
+
+        // 2. Tính mức tiêu hao trong 14 ngày gần nhất để tính trung bình ngày
+        var lookbackDays = 14;
+        var lookbackDate = DateTime.UtcNow.AddDays(-lookbackDays);
+
+        var outboundUsageByIngredient = await _context.InventoryTransactions
+            .AsNoTracking()
+            .Where(t => t.StoreId == storeId 
+                     && t.CreatedAt >= lookbackDate
+                     && (t.TransactionType == InventoryTransactionType.Outbound_Sale || t.TransactionType == InventoryTransactionType.Waste_Spoiled))
+            .GroupBy(t => t.IngredientId)
+            .Select(g => new
+            {
+                IngredientId = g.Key,
+                TotalUsed = -g.Sum(t => t.QuantityChange) // QuantityChange lưu dấu âm (-) nên đổi thành dương (+)
+            })
+            .ToDictionaryAsync(g => g.IngredientId, g => g.TotalUsed, ct);
+
+        var suggestions = new List<AutoReorderSuggestionItemDto>();
+        decimal totalEstimatedCost = 0m;
+
+        foreach (var inv in storeInventories)
+        {
+            if (inv.Ingredient == null) continue;
+
+            outboundUsageByIngredient.TryGetValue(inv.IngredientId, out var totalHistoricalUsage);
+            
+            // Tiêu hao trung bình hàng ngày (Daily Run-rate)
+            var avgDaily = totalHistoricalUsage > 0 
+                ? Math.Round(totalHistoricalUsage / lookbackDays, 2)
+                : 0m;
+
+            // Nhu cầu dự trù cho chu kỳ: (Số ngày vận chuyển + Số ngày dự trữ an toàn) * Mức tiêu hao/ngày
+            var totalCycleDays = planningDays + leadTimeDays;
+            var targetBufferStock = Math.Max(inv.MinAlertThreshold, avgDaily * totalCycleDays);
+
+            // Thiếu hụt cần đặt: Mục tiêu - Tồn hiện tại
+            var neededQuantity = targetBufferStock - inv.CurrentStock;
+
+            string priority = "Normal";
+            string reason = "Tồn kho an toàn";
+
+            if (inv.CurrentStock <= 0)
+            {
+                priority = "Critical";
+                reason = "ĐÃ HẾT HÀNG TRONG KHO! Nguy cơ đứt gãy pha chế.";
+                if (neededQuantity <= 0) neededQuantity = Math.Max(inv.MinAlertThreshold * 2, 10);
+            }
+            else if (inv.CurrentStock <= inv.MinAlertThreshold)
+            {
+                priority = "Warning";
+                var daysRemaining = avgDaily > 0 ? Math.Round(inv.CurrentStock / avgDaily, 1) : 0;
+                reason = daysRemaining > 0 
+                    ? $"Dưới ngưỡng cảnh báo! Dự kiến cạn kiệt trong {daysRemaining} ngày."
+                    : "Dưới ngưỡng tối thiểu quy định.";
+            }
+            else if (neededQuantity > 0 && avgDaily > 0)
+            {
+                var daysRemaining = Math.Round(inv.CurrentStock / avgDaily, 1);
+                if (daysRemaining <= totalCycleDays)
+                {
+                    priority = "Warning";
+                    reason = $"Lượng tồn chỉ đủ dùng {daysRemaining} ngày tới.";
+                }
+            }
+
+            var recommendedOrderQty = neededQuantity > 0 ? Math.Ceiling(neededQuantity) : 0m;
+
+            if (recommendedOrderQty > 0 || priority != "Normal")
+            {
+                var itemCost = recommendedOrderQty * inv.Ingredient.StandardCost;
+                totalEstimatedCost += itemCost;
+
+                suggestions.Add(new AutoReorderSuggestionItemDto(
+                    inv.IngredientId,
+                    inv.Ingredient.Code,
+                    inv.Ingredient.Name,
+                    inv.Ingredient.Unit,
+                    inv.CurrentStock,
+                    inv.MinAlertThreshold,
+                    avgDaily,
+                    recommendedOrderQty,
+                    inv.Ingredient.StandardCost,
+                    itemCost,
+                    priority,
+                    reason
+                ));
+            }
+        }
+
+        // Sắp xếp: Ưu tiên Critical -> Warning -> Normal
+        var orderedSuggestions = suggestions
+            .OrderBy(s => s.Priority == "Critical" ? 0 : s.Priority == "Warning" ? 1 : 2)
+            .ThenByDescending(s => s.RecommendedOrderQuantity)
+            .ToList();
+
+        return new AutoReorderSuggestionResponse(
+            store.Id,
+            store.Name,
+            defaultWarehouse.Id,
+            defaultWarehouse.Name,
+            leadTimeDays,
+            planningDays,
+            storeInventories.Count,
+            orderedSuggestions.Count,
+            totalEstimatedCost,
+            orderedSuggestions
+        );
+    }
+
     private static StockTransferOrderDto MapToDto(StockTransferOrder order)
     {
         return new StockTransferOrderDto(

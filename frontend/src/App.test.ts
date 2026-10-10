@@ -945,7 +945,94 @@ describe('Franchise Frontend Enterprise Suite', () => {
     assert.equal(discrepantCount, 2);
     assert.equal(totalDiscrepancyCost, -279000); // -375,000 + 96,000 = -279,000 đ
   });
+
+  it('calculates automated reorder suggestions (Auto-PO) with lead time and safety thresholds', () => {
+    interface MockInventoryItem {
+      ingredientId: string;
+      ingredientName: string;
+      currentStock: number;
+      minAlertThreshold: number;
+      dailyUsageRunRate: number;
+      standardCost: number;
+    }
+
+    const items: MockInventoryItem[] = [
+      {
+        ingredientId: 'ing-coffee',
+        ingredientName: 'Cà phê Hạt Blend',
+        currentStock: 2000, // 2000g
+        minAlertThreshold: 5000,
+        dailyUsageRunRate: 1500, // 1.5kg/ngày
+        standardCost: 250, // 250đ/g
+      },
+      {
+        ingredientId: 'ing-condensed-milk',
+        ingredientName: 'Sữa đặc Lon',
+        currentStock: 0, // Đã hết nhẵn
+        minAlertThreshold: 10,
+        dailyUsageRunRate: 5, // 5 lon/ngày
+        standardCost: 22000,
+      },
+      {
+        ingredientId: 'ing-sugar',
+        ingredientName: 'Đường cát',
+        currentStock: 100000, // Còn rất nhiều
+        minAlertThreshold: 10000,
+        dailyUsageRunRate: 2000,
+        standardCost: 25,
+      },
+    ];
+
+    const planningHorizonDays = 7;
+    const leadTimeDays = 2;
+    const totalDays = planningHorizonDays + leadTimeDays; // 9 days
+
+    const suggestions = items.map((it) => {
+      const demandOverHorizon = it.dailyUsageRunRate * totalDays;
+      const targetStockLevel = Math.max(it.minAlertThreshold, demandOverHorizon);
+      const recommendedReorderQuantity = Math.max(0, Math.ceil(targetStockLevel - it.currentStock));
+      const estimatedCost = recommendedReorderQuantity * it.standardCost;
+
+      let priority: 'Critical' | 'Warning' | 'Normal' = 'Normal';
+      if (it.currentStock <= 0) {
+        priority = 'Critical';
+      } else if (it.currentStock <= it.minAlertThreshold) {
+        priority = 'Warning';
+      }
+
+      return {
+        ...it,
+        targetStockLevel,
+        recommendedReorderQuantity,
+        estimatedCost,
+        priority,
+      };
+    });
+
+    // Coffee: target = max(5000, 1500 * 9) = 13500. Reorder = 13500 - 2000 = 11500g. Priority = Warning (2000 <= 5000)
+    assert.equal(suggestions[0].targetStockLevel, 13500);
+    assert.equal(suggestions[0].recommendedReorderQuantity, 11500);
+    assert.equal(suggestions[0].estimatedCost, 11500 * 250);
+    assert.equal(suggestions[0].priority, 'Warning');
+
+    // Milk: target = max(10, 5 * 9) = 45. Reorder = 45 - 0 = 45. Priority = Critical (currentStock = 0)
+    assert.equal(suggestions[1].targetStockLevel, 45);
+    assert.equal(suggestions[1].recommendedReorderQuantity, 45);
+    assert.equal(suggestions[1].estimatedCost, 45 * 22000);
+    assert.equal(suggestions[1].priority, 'Critical');
+
+    // Sugar: target = max(10000, 2000 * 9) = 18000. Reorder = max(0, 18000 - 100000) = 0. Priority = Normal
+    assert.equal(suggestions[2].targetStockLevel, 18000);
+    assert.equal(suggestions[2].recommendedReorderQuantity, 0);
+    assert.equal(suggestions[2].estimatedCost, 0);
+    assert.equal(suggestions[2].priority, 'Normal');
+
+    // Total Cost
+    const totalEstCost = suggestions.reduce((sum, s) => sum + s.estimatedCost, 0);
+    assert.equal(totalEstCost, 11500 * 250 + 45 * 22000);
+  });
 });
+
 
 
 

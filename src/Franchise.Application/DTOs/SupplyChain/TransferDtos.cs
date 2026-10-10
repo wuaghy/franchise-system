@@ -95,3 +95,39 @@ public record TransferOrderFilterDto(
     DateTime? FromDate = null,
     DateTime? ToDate = null
 );
+
+// DTOs cho Tự Động Đề Xuất Đặt Hàng & Dự Trù Tồn Kho (Auto-Reorder & PO Suggestions)
+public record AutoReorderSuggestionItemDto(
+    Guid IngredientId,
+    string IngredientCode,
+    string IngredientName,
+    string Unit,
+    decimal CurrentStock,
+    decimal MinAlertThreshold,
+    decimal AverageDailyConsumption, // Tiêu hao trung bình hàng ngày (dựa trên 7-30 ngày qua)
+    decimal RecommendedOrderQuantity, // Lượng đề xuất đặt hàng
+    decimal StandardCost,
+    decimal EstimatedTotalCost,
+    string Priority, // "Critical", "Warning", "Normal"
+    string ReorderReason
+);
+
+public record AutoReorderSuggestionResponse(
+    Guid StoreId,
+    string StoreName,
+    Guid RecommendedWarehouseId,
+    string RecommendedWarehouseName,
+    int LeadTimeDays, // Số ngày dự kiến vận chuyển & giao hàng (mặc định 2-3 ngày)
+    int PlanningHorizonDays, // Số ngày dự trù an toàn (mặc định 7 ngày)
+    int TotalItemsEvaluated,
+    int ItemsNeedingReorderCount,
+    decimal TotalEstimatedCost,
+    List<AutoReorderSuggestionItemDto> Suggestions
+);
+
+public record CreatePoFromSuggestionRequest(
+    Guid StoreId,
+    Guid WarehouseId,
+    string? Notes,
+    List<CreateTransferItemRequest> SelectedItems
+);

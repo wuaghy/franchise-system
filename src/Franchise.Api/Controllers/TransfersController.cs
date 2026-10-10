@@ -189,4 +189,22 @@ public class TransfersController : ControllerBase
         var result = await _supplyChainService.CancelTransferOrderAsync(id, userId, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Lấy gợi ý tự động đặt hàng & dự trù tồn kho cho chi nhánh (Auto-Reorder & PO Suggestions)
+    /// </summary>
+    [HttpGet("suggestions/{storeId:guid}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(AutoReorderSuggestionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAutoReorderSuggestions(
+        Guid storeId,
+        [FromQuery] int planningDays = 7,
+        [FromQuery] int leadTimeDays = 2,
+        CancellationToken ct = default)
+    {
+        var result = await _supplyChainService.GetAutoReorderSuggestionsAsync(storeId, planningDays, leadTimeDays, ct);
+        return Ok(result);
+    }
 }
+

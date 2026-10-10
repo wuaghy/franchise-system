@@ -472,4 +472,64 @@ public class SupplyChainServiceTests
         storeTx.BalanceAfter.Should().Be(34250);
         storeTx.Note.Should().Contain(dispatchedOrder.TransferCode);
     }
+
+    [Fact]
+    public async Task GetAutoReorderSuggestions_ShouldRecommendAccurateQuantities_BasedOnUsageAndThresholds()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var (warehouse, store, coffee, milk) = await SeedDataAsync(context);
+
+        // Store current stock:
+        // Cà phê = 2kg (dưới min threshold 10kg)
+        // Sữa đặc = 50 lon (trên min threshold 20 lon)
+        context.StoreInventories.AddRange(
+            new StoreInventory { StoreId = store.Id, IngredientId = coffee.Id, CurrentStock = 2, MinAlertThreshold = 10 },
+            new StoreInventory { StoreId = store.Id, IngredientId = milk.Id, CurrentStock = 50, MinAlertThreshold = 20 }
+        );
+
+        // Giả lập tiêu hao trong 14 ngày qua:
+        // Cà phê: bán 28kg trong 14 ngày -> trung bình 2kg/ngày
+        // Sữa: bán 14 lon trong 14 ngày -> trung bình 1 lon/ngày
+        context.InventoryTransactions.AddRange(
+            new InventoryTransaction
+            {
+                StoreId = store.Id,
+                IngredientId = coffee.Id,
+                TransactionType = InventoryTransactionType.Outbound_Sale,
+                QuantityChange = -28,
+                CreatedAt = DateTime.UtcNow.AddDays(-5)
+            },
+            new InventoryTransaction
+            {
+                StoreId = store.Id,
+                IngredientId = milk.Id,
+                TransactionType = InventoryTransactionType.Outbound_Sale,
+                QuantityChange = -14,
+                CreatedAt = DateTime.UtcNow.AddDays(-3)
+            }
+        );
+
+        await context.SaveChangesAsync();
+
+        var service = new SupplyChainService(context);
+
+        // Act: Dự trù 7 ngày an toàn + 2 ngày lead time = 9 ngày chu kỳ
+        // Cà phê: Nhu cầu = max(10, 2kg * 9 ngày = 18kg). Hiện có: 2kg -> Cần đặt: 18 - 2 = 16kg
+        // Sữa: Nhu cầu = max(20, 1 lon * 9 ngày = 9 lon) = 20 lon. Hiện có: 50 lon -> Đã đủ tồn kho
+        var result = await service.GetAutoReorderSuggestionsAsync(store.Id, planningDays: 7, leadTimeDays: 2);
+
+        // Assert
+        result.StoreId.Should().Be(store.Id);
+        result.TotalItemsEvaluated.Should().Be(2);
+        result.ItemsNeedingReorderCount.Should().BeGreaterThanOrEqualTo(1);
+
+        var coffeeSuggestion = result.Suggestions.FirstOrDefault(s => s.IngredientId == coffee.Id);
+        coffeeSuggestion.Should().NotBeNull();
+        coffeeSuggestion!.Priority.Should().Be("Warning");
+        coffeeSuggestion.AverageDailyConsumption.Should().Be(2.0m);
+        coffeeSuggestion.RecommendedOrderQuantity.Should().Be(16m);
+        coffeeSuggestion.EstimatedTotalCost.Should().Be(16m * 120000m); // 1,920,000 đ
+    }
 }
+

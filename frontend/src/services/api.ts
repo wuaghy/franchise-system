@@ -388,6 +388,14 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+
+  async getAutoReorderSuggestions(storeId: string, planningDays = 7, leadTimeDays = 2): Promise<AutoReorderSuggestionResponse> {
+    const params = new URLSearchParams({
+      planningDays: planningDays.toString(),
+      leadTimeDays: leadTimeDays.toString(),
+    });
+    return fetchJson(`${API_BASE}/transfers/suggestions/${storeId}?${params.toString()}`);
+  },
 };
 
 export interface CustomerData {
@@ -645,6 +653,34 @@ export interface SubmitStockAuditResponse {
   totalDiscrepancyCost: number;
   items: StockAuditDiscrepancyItem[];
   message: string;
+}
+
+export interface AutoReorderSuggestionItem {
+  ingredientId: string;
+  ingredientCode: string;
+  ingredientName: string;
+  unit: string;
+  currentStock: number;
+  minAlertThreshold: number;
+  averageDailyConsumption: number;
+  recommendedOrderQuantity: number;
+  standardCost: number;
+  estimatedTotalCost: number;
+  priority: "Critical" | "Warning" | "Normal" | string;
+  reorderReason: string;
+}
+
+export interface AutoReorderSuggestionResponse {
+  storeId: string;
+  storeName: string;
+  recommendedWarehouseId: string;
+  recommendedWarehouseName: string;
+  leadTimeDays: number;
+  planningHorizonDays: number;
+  totalItemsEvaluated: number;
+  itemsNeedingReorderCount: number;
+  totalEstimatedCost: number;
+  suggestions: AutoReorderSuggestionItem[];
 }
 
 
