@@ -279,5 +279,103 @@ export const api = {
   async getIngredients(): Promise<IngredientItem[]> {
     return fetchJson<IngredientItem[]>(`${API_BASE}/ingredients`);
   },
+
+  // Shifts & Cash Drawer Management
+  async openShift(payload: { storeId: string; startingCash: number; notes?: string }): Promise<ShiftData> {
+    return fetchJson(`${API_BASE}/shifts/open`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async closeShift(shiftId: string, payload: { actualEndingCash: number; notes?: string }): Promise<ShiftData> {
+    return fetchJson(`${API_BASE}/shifts/${shiftId}/close`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async addCashMovement(shiftId: string, payload: { amount: number; type: number; reason: string }): Promise<ShiftData> {
+    return fetchJson(`${API_BASE}/shifts/${shiftId}/movement`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getCurrentShift(storeId?: string): Promise<CurrentShiftResponse> {
+    const params = storeId ? `?storeId=${storeId}` : '';
+    return fetchJson(`${API_BASE}/shifts/current${params}`);
+  },
+
+  async getZReport(shiftId: string): Promise<ZReportData> {
+    return fetchJson(`${API_BASE}/shifts/${shiftId}/z-report`);
+  },
+
+  async getShiftHistory(storeId: string, pageNumber = 1, pageSize = 10): Promise<{ items: ShiftData[]; totalCount: number }> {
+    return fetchJson(`${API_BASE}/shifts/history?storeId=${storeId}&pageNumber=${pageNumber}&pageSize=${pageSize}`);
+  },
 };
+
+export interface ShiftCashMovement {
+  id: string;
+  shiftId: string;
+  amount: number;
+  type: number; // 1: CashIn, 2: CashOut
+  reason: string;
+  createdByUserId: string;
+  createdByUserName?: string;
+  createdAt: string;
+}
+
+export interface ShiftData {
+  id: string;
+  shiftNumber: string;
+  storeId: string;
+  storeName?: string;
+  cashierId: string;
+  cashierName?: string;
+  openedAt: string;
+  closedAt?: string;
+  status: number; // 0: Open, 1: Closed, 2: ForceClosed
+  startingCash: number;
+  totalCashSales: number;
+  totalBankTransferSales: number;
+  totalCardSales: number;
+  totalCashIn: number;
+  totalCashOut: number;
+  expectedEndingCash: number;
+  actualEndingCash?: number;
+  cashDiscrepancy?: number;
+  totalOrdersCount: number;
+  notes?: string;
+  movements: ShiftCashMovement[];
+}
+
+export interface CurrentShiftResponse {
+  hasOpenShift: boolean;
+  currentShift: ShiftData | null;
+}
+
+export interface ZReportData {
+  shiftId: string;
+  shiftNumber: string;
+  storeName: string;
+  cashierName: string;
+  openedAt: string;
+  closedAt: string;
+  startingCash: number;
+  totalCashSales: number;
+  totalBankTransferSales: number;
+  totalCardSales: number;
+  totalRevenue: number;
+  totalCashIn: number;
+  totalCashOut: number;
+  expectedEndingCash: number;
+  actualEndingCash: number;
+  cashDiscrepancy: number;
+  totalOrdersCount: number;
+  notes?: string;
+  movements: ShiftCashMovement[];
+}
+
 

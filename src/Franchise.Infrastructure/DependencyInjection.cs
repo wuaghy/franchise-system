@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<Franchise.Application.Common.Interfaces.IEmailService, Services.SmtpEmailService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IVietQrService, Services.VietQrService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IPaymentWebhookService, Services.PaymentWebhookService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.IShiftService, Services.ShiftService>();
         services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;

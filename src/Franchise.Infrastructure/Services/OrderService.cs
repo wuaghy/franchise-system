@@ -168,6 +168,29 @@ public class OrderService : IOrderService
         var randomSuffix = Random.Shared.Next(1000, 9999);
         var orderNumber = $"ORD-{timestamp}-{randomSuffix}";
 
+        // 4.1 Tích lũy doanh số vào Ca làm việc đang mở (nếu có)
+        var openShift = await _context.Shifts
+            .FirstOrDefaultAsync(s => s.StoreId == request.StoreId && s.Status == ShiftStatus.Open, ct);
+
+        if (openShift != null)
+        {
+            if (request.PaymentMethod == PaymentMethod.Cash)
+            {
+                openShift.TotalCashSales += finalAmount;
+            }
+            else if (request.PaymentMethod == PaymentMethod.CreditCard)
+            {
+                openShift.TotalCardSales += finalAmount;
+            }
+            else
+            {
+                openShift.TotalBankTransferSales += finalAmount;
+            }
+
+            openShift.TotalOrdersCount += 1;
+            openShift.ExpectedEndingCash = openShift.StartingCash + openShift.TotalCashSales + openShift.TotalCashIn - openShift.TotalCashOut;
+        }
+
         // 5. Khởi tạo Order và Payment
         var order = new Order
         {
@@ -175,6 +198,7 @@ public class OrderService : IOrderService
             StoreId = request.StoreId,
             CustomerId = request.CustomerId,
             CashierId = request.CashierId ?? _currentUserService?.UserId,
+            ShiftId = openShift?.Id,
             OrderType = request.OrderType,
             Status = OrderStatus.Completed,
             Subtotal = subtotal,

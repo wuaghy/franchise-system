@@ -15,6 +15,9 @@ public class Order : BaseEntity
     public Guid? CashierId { get; set; }
     public StoreUser? Cashier { get; set; }
 
+    public Guid? ShiftId { get; set; }
+    public Shift? Shift { get; set; }
+
     public OrderType OrderType { get; set; } = OrderType.DineIn;
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
 

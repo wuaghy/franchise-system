@@ -664,6 +664,61 @@ describe('Franchise Frontend Enterprise Suite', () => {
     const isMismatch = otherOrderCode.toUpperCase() === activeOrderCode.toUpperCase();
     assert.equal(isMismatch, false);
   });
+
+  it('calculates Shift expected ending cash and cash discrepancy accurately', () => {
+    const startingCash = 1000000; // 1,000,000 đ tiền mồi két đầu ca
+    const totalCashSales = 2450000; // Bán hàng tiền mặt trong ca
+    const totalCashIn = 200000; // Nạp thêm tiền lẻ vào két
+    const totalCashOut = 150000; // Chi vặt mua đá viên / túi nilon
+
+    // Công thức F&B chuẩn: Expected = Start + CashSales + CashIn - CashOut
+    const expectedEndingCash = startingCash + totalCashSales + totalCashIn - totalCashOut;
+    assert.equal(expectedEndingCash, 3500000);
+
+    // Kịch bản 1: Tiền mặt đếm thực tế khớp 100%
+    const actualEndingCashMatched = 3500000;
+    const discrepancyBalanced = actualEndingCashMatched - expectedEndingCash;
+    assert.equal(discrepancyBalanced, 0);
+
+    // Kịch bản 2: Thực tế thiếu 20k (do thối nhầm)
+    const actualEndingCashShort = 3480000;
+    const discrepancyShort = actualEndingCashShort - expectedEndingCash;
+    assert.equal(discrepancyShort, -20000);
+
+    // Kịch bản 3: Thực tế thừa 50k
+    const actualEndingCashOver = 3550000;
+    const discrepancyOver = actualEndingCashOver - expectedEndingCash;
+    assert.equal(discrepancyOver, 50000);
+  });
+
+  it('calculates total physical cash from denomination breakdown accurately', () => {
+    const denominations = [
+      { value: 500000, count: 4 }, // 2,000,000 đ
+      { value: 200000, count: 5 }, // 1,000,000 đ
+      { value: 100000, count: 3 }, // 300,000 đ
+      { value: 50000, count: 2 },  // 100,000 đ
+      { value: 20000, count: 4 },  // 80,000 đ
+      { value: 10000, count: 2 },  // 20,000 đ
+    ];
+
+    const totalCalculated = denominations.reduce((sum, d) => sum + d.value * d.count, 0);
+    assert.equal(totalCalculated, 3500000);
+  });
+
+  it('validates Z-Report revenue and payment method breakdown rollup', () => {
+    const totalCashSales = 1800000;
+    const totalBankTransferSales = 3200000;
+    const totalCardSales = 950000;
+
+    const totalRevenue = totalCashSales + totalBankTransferSales + totalCardSales;
+    assert.equal(totalRevenue, 5950000);
+
+    const startingCash = 1000000;
+    const totalCashIn = 100000;
+    const totalCashOut = 50000;
+    const expectedCashInDrawer = startingCash + totalCashSales + totalCashIn - totalCashOut;
+    assert.equal(expectedCashInDrawer, 2850000);
+  });
 });
 
 

@@ -109,6 +109,8 @@ import { VietQrModal } from "./components/VietQrModal.tsx";
 import { FranchiseContractModal } from "./components/FranchiseContractModal.tsx";
 import { SignaturePad } from "./components/SignaturePad.tsx";
 import { reportsService } from "./services/reports.ts";
+import { ShiftModal, type ShiftModalMode } from "./components/ShiftModal.tsx";
+import type { ShiftData } from "./services/api.ts";
 
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
@@ -2046,9 +2048,24 @@ function PosScreen({
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [ticketSeq, setTicketSeq] = useState(() => Math.floor(100 + Math.random() * 900));
   const [showVietQrModal, setShowVietQrModal] = useState<boolean>(false);
+  const [currentShift, setCurrentShift] = useState<ShiftData | null>(null);
+  const [shiftModalMode, setShiftModalMode] = useState<ShiftModalMode | null>(null);
 
   const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";
   const [storeDisplayName, setStoreDisplayName] = useState<string>("Chi nhánh Quận 1 (Flagship Store)");
+
+  const fetchActiveShift = async () => {
+    try {
+      const res = await api.getCurrentShift(effectiveStoreId);
+      setCurrentShift(res.hasOpenShift ? res.currentShift : null);
+    } catch (err) {
+      console.warn("Could not load current shift:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveShift();
+  }, [effectiveStoreId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2296,13 +2313,58 @@ function PosScreen({
       <section className="min-w-0">
         <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-red-700">Counter 03 · Shift A</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-red-700">Counter 03</span>
+              {currentShift ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">
+                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Ca #{currentShift.shiftNumber} · Két: {currentShift.expectedEndingCash.toLocaleString("vi-VN")} đ
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">
+                  <span className="size-1.5 rounded-full bg-amber-500"></span>
+                  Chưa nhận ca
+                </span>
+              )}
+            </div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950">
               Good morning, {currentUser?.fullName || currentUser?.username || "Linh"}
             </h1>
             <p className="text-xs text-slate-500">Tap a menu item to start building the order.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Shift Action Buttons */}
+            {!currentShift ? (
+              <button
+                type="button"
+                onClick={() => setShiftModalMode("open")}
+                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1.5 text-xs font-black text-white shadow-sm hover:from-emerald-500 hover:to-teal-500 transition active:scale-95"
+              >
+                <Banknote size={14} /> Mở Ca Đầu Ngày
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShiftModalMode("movement")}
+                  className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                  title="Ghi nhận chi vặt (mua đá, túi nilon) hoặc nộp tiền thêm"
+                >
+                  <CircleDollarSign size={13} className="text-amber-600" />
+                  <span>Chi Vặt / Nạp Két</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShiftModalMode("close")}
+                  className="flex items-center gap-1 rounded-xl border border-red-200 bg-red-50/80 px-2.5 py-1.5 text-xs font-bold text-red-800 hover:bg-red-100 transition shadow-2xs"
+                  title="Kiểm đếm tiền và in phiếu Z-Report chốt ca"
+                >
+                  <Lock size={13} className="text-red-600" />
+                  <span>Chốt Ca (Z-Report)</span>
+                </button>
+              </>
+            )}
+
             {isOnline ? (
               <Badge tone="success" pulse>
                 Terminal online
@@ -2326,9 +2388,6 @@ function PosScreen({
             >
               <RefreshCcw size={14} className={isSyncing ? "animate-spin" : ""} />
               {isSyncing ? "Đang nộp..." : "Đồng bộ"}
-            </Button>
-            <Button>
-              <MoreHorizontal size={18} />
             </Button>
           </div>
         </div>
@@ -2571,6 +2630,19 @@ function PosScreen({
           onClose={() => setShowVietQrModal(false)}
           onSuccess={async () => {
             await executeOnlineCheckout();
+          }}
+        />
+      )}
+
+      {shiftModalMode && (
+        <ShiftModal
+          mode={shiftModalMode}
+          storeId={effectiveStoreId}
+          storeName={effectiveStoreName}
+          currentShift={currentShift}
+          onClose={() => setShiftModalMode(null)}
+          onShiftUpdated={async () => {
+            await fetchActiveShift();
           }}
         />
       )}

@@ -53,6 +53,10 @@ public class AppDbContext : DbContext
     public DbSet<StoreRoyaltySetting> StoreRoyaltySettings => Set<StoreRoyaltySetting>();
     public DbSet<FranchiseContract> FranchiseContracts => Set<FranchiseContract>();
 
+    // 8. Phân hệ Ca làm việc & Két tiền (Shift & Cash Drawer)
+    public DbSet<Shift> Shifts => Set<Shift>();
+    public DbSet<ShiftCashMovement> ShiftCashMovements => Set<ShiftCashMovement>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -552,6 +556,56 @@ public class AppDbContext : DbContext
                 .WithOne(s => s.Contract)
                 .HasForeignKey<FranchiseContract>(e => e.StoreId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // --- 8. SHIFT & CASH DRAWER ---
+        modelBuilder.Entity<Shift>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.ShiftNumber).IsUnique();
+            b.Property(e => e.ShiftNumber).IsRequired().HasMaxLength(50);
+            b.Property(e => e.StartingCash).HasPrecision(18, 2);
+            b.Property(e => e.TotalCashSales).HasPrecision(18, 2);
+            b.Property(e => e.TotalBankTransferSales).HasPrecision(18, 2);
+            b.Property(e => e.TotalCardSales).HasPrecision(18, 2);
+            b.Property(e => e.TotalCashIn).HasPrecision(18, 2);
+            b.Property(e => e.TotalCashOut).HasPrecision(18, 2);
+            b.Property(e => e.ExpectedEndingCash).HasPrecision(18, 2);
+            b.Property(e => e.ActualEndingCash).HasPrecision(18, 2);
+            b.Property(e => e.CashDiscrepancy).HasPrecision(18, 2);
+            b.Property(e => e.Notes).HasMaxLength(500);
+
+            b.HasOne(e => e.Store)
+                .WithMany()
+                .HasForeignKey(e => e.StoreId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.Cashier)
+                .WithMany()
+                .HasForeignKey(e => e.CashierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasMany(e => e.Movements)
+                .WithOne(m => m.Shift)
+                .HasForeignKey(m => m.ShiftId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasMany(e => e.Orders)
+                .WithOne(o => o.Shift)
+                .HasForeignKey(o => o.ShiftId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ShiftCashMovement>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Amount).HasPrecision(18, 2);
+            b.Property(e => e.Reason).IsRequired().HasMaxLength(255);
+
+            b.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
