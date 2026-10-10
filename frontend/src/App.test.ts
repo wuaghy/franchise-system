@@ -1090,6 +1090,65 @@ describe('Franchise Frontend Enterprise Suite', () => {
     const onTimeRate = (onTimeCount / totalCycleHours.length) * 100;
     assert.equal(onTimeRate, 100);
   });
+
+  it('generates STO printable invoice total value and CSV serialization correctly', () => {
+    const mockOrder = {
+      transferCode: 'STO-202610-0088',
+      sourceWarehouseName: 'Kho Tổng Miền Nam',
+      destinationStoreName: 'Chi nhánh Quận 1',
+      destinationStoreCode: 'STORE-Q1',
+      status: 'Approved',
+      dispatchTrackingNumber: 'VNPOST-881239',
+      createdAt: '2026-10-10T08:00:00Z',
+      items: [
+        {
+          ingredientId: 'ing-1',
+          ingredientName: 'Arabica Coffee Beans',
+          ingredientCode: 'BEAN-ARA',
+          unit: 'gram',
+          requestedQuantity: 20000,
+          approvedQuantity: 20000,
+          actualReceivedQuantity: 0,
+          unitCost: 350,
+        },
+        {
+          ingredientId: 'ing-2',
+          ingredientName: 'Black Tapioca Pearl',
+          ingredientCode: 'PEARL-01',
+          unit: 'gram',
+          requestedQuantity: 10000,
+          approvedQuantity: 10000,
+          actualReceivedQuantity: 0,
+          unitCost: 150,
+        },
+      ],
+    };
+
+    // Calculate total order estimated value: 20000 * 350 + 10000 * 150 = 7,000,000 + 1,500,000 = 8,500,000 đ
+    const totalEstValue = mockOrder.items.reduce(
+      (sum, it) => sum + (it.approvedQuantity || it.requestedQuantity) * it.unitCost,
+      0
+    );
+    assert.equal(totalEstValue, 8_500_000);
+
+    // CSV serialization format check
+    const headers = ['Mã STO', 'Kho Xuất', 'Chi Nhánh Nhận', 'Mã Chi Nhánh', 'Trạng Thái', 'Mã Vận Đơn', 'Số Mặt Hàng'];
+    const row = [
+      `"${mockOrder.transferCode}"`,
+      `"${mockOrder.sourceWarehouseName}"`,
+      `"${mockOrder.destinationStoreName}"`,
+      `"${mockOrder.destinationStoreCode}"`,
+      `"${mockOrder.status}"`,
+      `"${mockOrder.dispatchTrackingNumber}"`,
+      mockOrder.items.length,
+    ];
+
+    const csvRowString = row.join(',');
+    assert.ok(csvRowString.includes('STO-202610-0088'));
+    assert.ok(csvRowString.includes('STORE-Q1'));
+    assert.ok(csvRowString.includes('VNPOST-881239'));
+    assert.equal(row[6], 2);
+  });
 });
 
 

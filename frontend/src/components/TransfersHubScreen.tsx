@@ -25,6 +25,9 @@ import {
   TrendingDown,
   BarChart3,
   Timer,
+  Printer,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import {
   getTransferOrders,
@@ -446,6 +449,182 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
     }
   };
 
+  const handlePrintTransferOrder = (order: StockTransferOrderDto) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Trình duyệt đã chặn cửa sổ in (Popup Blocked). Vui lòng cho phép popup để in phiếu!");
+      return;
+    }
+
+    const itemsHtml = order.items
+      .map(
+        (it, idx) => `
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${idx + 1}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${it.ingredientName}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; font-family: monospace;">${it.ingredientCode}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${it.unit}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold;">${it.requestedQuantity.toLocaleString()}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${it.approvedQuantity.toLocaleString()}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold; color: #166534;">${it.actualReceivedQuantity.toLocaleString()}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-family: monospace;">${(it.unitCost || 0).toLocaleString()}₫</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold;">${((it.approvedQuantity || it.requestedQuantity) * (it.unitCost || 0)).toLocaleString()}₫</td>
+        </tr>`
+      )
+      .join("");
+
+    const totalEstValue = order.items.reduce(
+      (sum, it) => sum + (it.approvedQuantity || it.requestedQuantity) * (it.unitCost || 0),
+      0
+    );
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>PHIẾU XUẤT KHO ĐIỀU CHUYỂN - ${order.transferCode}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; line-height: 1.5; color: #1e293b; padding: 25px; margin: 0; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #991b1b; padding-bottom: 12px; margin-bottom: 20px; }
+          .title { font-size: 20px; font-weight: 900; color: #991b1b; margin: 0; text-transform: uppercase; }
+          .sub { font-size: 11px; color: #64748b; margin-top: 3px; }
+          .meta-box { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+          .meta-item { font-size: 12px; }
+          .meta-label { font-weight: bold; color: #475569; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          th { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px; font-size: 11px; text-transform: uppercase; }
+          .signatures { display: flex; justify-content: space-between; margin-top: 40px; page-break-inside: avoid; }
+          .sig-box { text-align: center; width: 22%; }
+          .sig-title { font-weight: bold; font-size: 12px; margin-bottom: 50px; }
+          .sig-name { font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 5px; }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print" style="margin-bottom: 15px; text-align: right;">
+          <button onclick="window.print()" style="background: #991b1b; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+            🖨️ In Phiếu Ngay
+          </button>
+        </div>
+        <div class="header">
+          <div>
+            <h1 class="title">PHIẾU ĐIỀU CHUYỂN KHO HÀNG HÓA (STO)</h1>
+            <div class="sub">HỆ THỐNG QUẢN LÝ CHUỖI F&B FRANCHISE ENTERPRISE</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 16px; font-weight: 900; font-family: monospace;">${order.transferCode}</div>
+            <div class="sub">Ngày tạo: ${new Date(order.createdAt).toLocaleDateString("vi-VN")}</div>
+          </div>
+        </div>
+
+        <div class="meta-box">
+          <div class="meta-item"><span class="meta-label">Kho xuất (Nguồn):</span> ${order.sourceWarehouseName || "Kho Tổng Trung Tâm"}</div>
+          <div class="meta-item"><span class="meta-label">Cửa hàng nhận (Đích):</span> ${order.destinationStoreName} (${order.destinationStoreCode})</div>
+          <div class="meta-item"><span class="meta-label">Mã vận đơn:</span> <b>${order.dispatchTrackingNumber || "Chưa phát hành"}</b></div>
+          <div class="meta-item"><span class="meta-label">Trạng thái đơn:</span> <b>${order.status}</b></div>
+          ${order.notes ? `<div class="meta-item" style="grid-column: span 2;"><span class="meta-label">Ghi chú:</span> ${order.notes}</div>` : ""}
+          ${order.discrepancyNotes ? `<div class="meta-item" style="grid-column: span 2; color: #991b1b;"><span class="meta-label">Ghi chú sai lệch:</span> ${order.discrepancyNotes}</div>` : ""}
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;">STT</th>
+              <th>Tên Nguyên Liệu</th>
+              <th style="width: 90px;">Mã NL</th>
+              <th style="width: 60px;">ĐVT</th>
+              <th style="width: 90px; text-align: right;">Yêu Cầu</th>
+              <th style="width: 90px; text-align: right;">Duyệt Xuất</th>
+              <th style="width: 90px; text-align: right;">Thực Nhận</th>
+              <th style="width: 100px; text-align: right;">Đơn Giá</th>
+              <th style="width: 110px; text-align: right;">Thành Tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f8fafc; font-weight: bold;">
+              <td colspan="8" style="border: 1px solid #ddd; padding: 10px; text-align: right; text-transform: uppercase;">Tổng Giá Trị Lô Hàng Dự Toán:</td>
+              <td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-family: monospace; font-size: 14px; color: #991b1b;">${totalEstValue.toLocaleString()}₫</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="signatures">
+          <div class="sig-box">
+            <div class="sig-title">Người Lập Phiếu</div>
+            <div class="sig-name">(Ký và ghi rõ họ tên)</div>
+          </div>
+          <div class="sig-box">
+            <div class="sig-title">Thủ Kho Xuất (HQ)</div>
+            <div class="sig-name">(Ký và ghi rõ họ tên)</div>
+          </div>
+          <div class="sig-box">
+            <div class="sig-title">Đơn Vị Vận Chuyển</div>
+            <div class="sig-name">(Ký và ghi rõ họ tên)</div>
+          </div>
+          <div class="sig-box">
+            <div class="sig-title">Cửa Hàng Trưởng Nhận</div>
+            <div class="sig-name">(Ký và ghi rõ họ tên)</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleExportTransfersCsv = () => {
+    if (orders.length === 0) {
+      alert("Không có dữ liệu đơn STO để xuất file!");
+      return;
+    }
+
+    const headers = [
+      "Mã STO",
+      "Kho Xuất",
+      "Chi Nhánh Nhận",
+      "Mã Chi Nhánh",
+      "Trạng Thái",
+      "Mã Vận Đơn",
+      "Số Mặt Hàng",
+      "Ngày Tạo",
+      "Ngày Xuất Kho",
+      "Ngày Nhận Hàng",
+      "Ghi Chú",
+    ];
+
+    const rows = orders.map((o) => [
+      `"${o.transferCode}"`,
+      `"${o.sourceWarehouseName}"`,
+      `"${o.destinationStoreName}"`,
+      `"${o.destinationStoreCode}"`,
+      `"${o.status}"`,
+      `"${o.dispatchTrackingNumber || ""}"`,
+      o.items.length,
+      `"${new Date(o.createdAt).toLocaleDateString("vi-VN")}"`,
+      `"${o.dispatchedAt ? new Date(o.dispatchedAt).toLocaleDateString("vi-VN") : ""}"`,
+      `"${o.receivedAt ? new Date(o.receivedAt).toLocaleDateString("vi-VN") : ""}"`,
+      `"${(o.notes || "").replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Bao_Cao_Dieu_Chuyen_STO_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   function renderStatusBadge(status: TransferStatus) {
     switch (status) {
       case "Draft":
@@ -481,6 +660,13 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
+          <button
+            onClick={handleExportTransfersCsv}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition"
+            title="Xuất danh sách STO ra định dạng Excel CSV"
+          >
+            <FileSpreadsheet size={16} className="text-emerald-700" /> Xuất Excel CSV
+          </button>
           <button
             onClick={() => setActiveModal("create")}
             className="inline-flex items-center gap-2 rounded-xl bg-red-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition"
@@ -680,6 +866,14 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                               title="Xem chi tiết"
                             >
                               <Eye size={15} />
+                            </button>
+
+                            <button
+                              onClick={() => handlePrintTransferOrder(order)}
+                              className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-red-800 transition"
+                              title="In phiếu xuất kho điều chuyển"
+                            >
+                              <Printer size={15} />
                             </button>
 
                             {order.status === "Draft" && (
@@ -1657,8 +1851,16 @@ export function TransfersHubScreen({ currentUser, onSwitchUser }: TransfersHubSc
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end border-t border-slate-100 px-6 py-4 bg-slate-50">
-              <button onClick={() => setActiveModal(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700">Đóng</button>
+            <div className="flex justify-between items-center border-t border-slate-100 px-6 py-4 bg-slate-50">
+              <button
+                onClick={() => handlePrintTransferOrder(selectedOrder)}
+                className="inline-flex items-center gap-2 rounded-xl bg-red-800 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition"
+              >
+                <Printer size={15} /> In Phiếu Xuất Kho STO
+              </button>
+              <button onClick={() => setActiveModal(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
+                Đóng
+              </button>
             </div>
           </div>
         </div>
