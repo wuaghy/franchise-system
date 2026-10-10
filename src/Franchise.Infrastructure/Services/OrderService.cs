@@ -159,16 +159,121 @@ public class OrderService : IOrderService
             });
         }
 
-        decimal discountAmount = 0m;
+        // 4.1 Xử lý Khách hàng, Hạng thành viên, Voucher & Điểm tích lũy (Loyalty & Promotions)
+        Customer? customer = null;
+        if (request.CustomerId.HasValue)
+        {
+            customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == request.CustomerId.Value, ct);
+        }
+        else if (!string.IsNullOrWhiteSpace(request.CustomerPhoneNumber))
+        {
+            var cleanPhone = new string(request.CustomerPhoneNumber.Where(char.IsDigit).ToArray());
+            if (cleanPhone.StartsWith("84") && cleanPhone.Length > 9) cleanPhone = "0" + cleanPhone[2..];
+            customer = await _context.Customers.FirstOrDefaultAsync(c => c.PhoneNumber == cleanPhone, ct);
+        }
+
+        decimal tierDiscountAmount = 0m;
+        if (customer != null)
+        {
+            var tierPercent = customer.MemberTier switch
+            {
+                MemberTier.Diamond => 15m,
+                MemberTier.Gold => 10m,
+                MemberTier.Silver => 5m,
+                _ => 0m
+            };
+            if (tierPercent > 0)
+            {
+                tierDiscountAmount = Math.Round(subtotal * (tierPercent / 100m), 2);
+            }
+        }
+
+        Voucher? voucher = null;
+        decimal voucherDiscountAmount = 0m;
+        if (!string.IsNullOrWhiteSpace(request.VoucherCode))
+        {
+            var code = request.VoucherCode.Trim().ToUpperInvariant();
+            var now = DateTime.UtcNow;
+            voucher = await _context.Vouchers.FirstOrDefaultAsync(v => v.Code == code && v.IsActive, ct);
+            if (voucher != null && voucher.ValidFrom <= now && voucher.ValidTo >= now && voucher.TimesUsed < voucher.UsageLimit && subtotal >= voucher.MinOrderAmount)
+            {
+                if (voucher.DiscountType == DiscountType.Percentage)
+                {
+                    var calc = subtotal * (voucher.DiscountValue / 100m);
+                    voucherDiscountAmount = voucher.MaxDiscountAmount.HasValue && calc > voucher.MaxDiscountAmount.Value
+                        ? voucher.MaxDiscountAmount.Value
+                        : calc;
+                }
+                else
+                {
+                    voucherDiscountAmount = voucher.DiscountValue;
+                }
+                voucherDiscountAmount = Math.Round(voucherDiscountAmount, 2);
+                voucher.TimesUsed += 1;
+            }
+        }
+
+        int pointsRedeemed = 0;
+        decimal pointsDiscountAmount = 0m;
+        if (customer != null && request.PointsToRedeem > 0)
+        {
+            pointsRedeemed = Math.Min(request.PointsToRedeem, customer.LoyaltyPoints);
+            pointsDiscountAmount = pointsRedeemed * 1000m; // 1 điểm = 1.000 đ
+        }
+
+        decimal discountAmount = tierDiscountAmount + voucherDiscountAmount + pointsDiscountAmount;
+        if (discountAmount > subtotal)
+        {
+            discountAmount = subtotal;
+        }
+
         decimal vatRate = 0.08m; // Thuế GTGT 8% cho ngành dịch vụ đồ uống F&B
-        decimal vatAmount = Math.Round(subtotal * vatRate, 2);
-        decimal finalAmount = subtotal + vatAmount - discountAmount;
+        decimal taxableAmount = Math.Max(0m, subtotal - discountAmount);
+        decimal vatAmount = Math.Round(taxableAmount * vatRate, 2);
+        decimal finalAmount = taxableAmount + vatAmount;
 
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
         var randomSuffix = Random.Shared.Next(1000, 9999);
         var orderNumber = $"ORD-{timestamp}-{randomSuffix}";
 
-        // 4.1 Tích lũy doanh số vào Ca làm việc đang mở (nếu có)
+        // Tích điểm cho đơn hàng: 10.000 đ = 1 điểm
+        int pointsEarned = 0;
+        if (customer != null)
+        {
+            pointsEarned = (int)(finalAmount / 10000m);
+            customer.TotalSpent += finalAmount;
+            customer.LoyaltyPoints = customer.LoyaltyPoints - pointsRedeemed + pointsEarned;
+
+            // Tự động nâng hạng thành viên dựa trên TotalSpent
+            if (customer.TotalSpent >= 5_000_000m) customer.MemberTier = MemberTier.Diamond;
+            else if (customer.TotalSpent >= 2_000_000m) customer.MemberTier = MemberTier.Gold;
+            else if (customer.TotalSpent >= 500_000m) customer.MemberTier = MemberTier.Silver;
+
+            // Ghi nhật ký biến động điểm
+            if (pointsRedeemed > 0)
+            {
+                _context.LoyaltyTransactions.Add(new LoyaltyTransaction
+                {
+                    Customer = customer,
+                    PointsChange = -pointsRedeemed,
+                    PointsBalanceAfter = customer.LoyaltyPoints - pointsEarned,
+                    Reason = $"Đổi điểm giảm trừ đơn hàng {orderNumber}"
+                });
+            }
+
+            if (pointsEarned > 0)
+            {
+                _context.LoyaltyTransactions.Add(new LoyaltyTransaction
+                {
+                    Customer = customer,
+                    PointsChange = pointsEarned,
+                    PointsBalanceAfter = customer.LoyaltyPoints,
+                    Reason = $"Tích điểm thành công từ đơn hàng {orderNumber}"
+                });
+            }
+        }
+
+        // 4.2 Tích lũy doanh số vào Ca làm việc đang mở (nếu có)
         var openShift = await _context.Shifts
             .FirstOrDefaultAsync(s => s.StoreId == request.StoreId && s.Status == ShiftStatus.Open, ct);
 
@@ -196,7 +301,7 @@ public class OrderService : IOrderService
         {
             OrderNumber = orderNumber,
             StoreId = request.StoreId,
-            CustomerId = request.CustomerId,
+            CustomerId = customer?.Id ?? request.CustomerId,
             CashierId = request.CashierId ?? _currentUserService?.UserId,
             ShiftId = openShift?.Id,
             OrderType = request.OrderType,
@@ -205,6 +310,9 @@ public class OrderService : IOrderService
             DiscountAmount = discountAmount,
             VatAmount = vatAmount,
             FinalAmount = finalAmount,
+            VoucherId = voucher?.Id,
+            PointsRedeemed = pointsRedeemed,
+            PointsEarned = pointsEarned,
             CompletedAt = DateTime.UtcNow,
             OrderItems = orderItems
         };

@@ -106,6 +106,9 @@ export interface OrderItemPayload {
 export interface CheckoutOrderPayload {
   storeId: string;
   customerId?: string;
+  customerPhoneNumber?: string;
+  voucherCode?: string;
+  pointsToRedeem?: number;
   cashierId?: string;
   orderType: number; // 0: DineIn, 1: TakeAway, 2: Delivery
   paymentMethod: number; // 0: Cash, 1: QRCode, 2: CreditCard
@@ -314,7 +317,88 @@ export const api = {
   async getShiftHistory(storeId: string, pageNumber = 1, pageSize = 10): Promise<{ items: ShiftData[]; totalCount: number }> {
     return fetchJson(`${API_BASE}/shifts/history?storeId=${storeId}&pageNumber=${pageNumber}&pageSize=${pageSize}`);
   },
+
+  async lookupCustomer(phoneNumber: string): Promise<CustomerLookupResponse> {
+    return fetchJson(`${API_BASE}/loyalty/customers/lookup?phoneNumber=${encodeURIComponent(phoneNumber)}`);
+  },
+
+  async registerCustomer(payload: RegisterCustomerPayload): Promise<CustomerData> {
+    return fetchJson(`${API_BASE}/loyalty/customers/register`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async applyPromotion(payload: ApplyPromotionPayload): Promise<ApplyPromotionResponse> {
+    return fetchJson(`${API_BASE}/loyalty/promotions/apply`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getActiveVouchers(phoneNumber?: string): Promise<VoucherData[]> {
+    const params = phoneNumber ? `?phoneNumber=${encodeURIComponent(phoneNumber)}` : '';
+    return fetchJson(`${API_BASE}/loyalty/vouchers${params}`);
+  },
 };
+
+export interface CustomerData {
+  id: string;
+  phoneNumber: string;
+  fullName: string;
+  email?: string;
+  dateOfBirth?: string;
+  loyaltyPoints: number;
+  totalSpent: number;
+  memberTier: number; // 0: Standard, 1: Silver, 2: Gold, 3: Diamond
+  createdAt: string;
+}
+
+export interface VoucherData {
+  id: string;
+  code: string;
+  title: string;
+  description?: string;
+  discountType: number; // 1: Percentage, 2: FixedAmount
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscountAmount?: number;
+  validTo: string;
+  isApplicable: boolean;
+}
+
+export interface CustomerLookupResponse {
+  found: boolean;
+  customer?: CustomerData | null;
+  tierDiscountPercent: number;
+  availableVouchers: VoucherData[];
+}
+
+export interface RegisterCustomerPayload {
+  phoneNumber: string;
+  fullName: string;
+  email?: string;
+  dateOfBirth?: string;
+}
+
+export interface ApplyPromotionPayload {
+  phoneNumber?: string;
+  voucherCode?: string;
+  pointsToRedeem: number;
+  subtotal: number;
+}
+
+export interface ApplyPromotionResponse {
+  success: boolean;
+  message: string;
+  tierDiscountAmount: number;
+  voucherDiscountAmount: number;
+  pointsDiscountAmount: number;
+  totalDiscountAmount: number;
+  pointsRedeemed: number;
+  customer?: CustomerData | null;
+  appliedVoucher?: VoucherData | null;
+}
 
 export interface ShiftCashMovement {
   id: string;

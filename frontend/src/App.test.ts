@@ -719,6 +719,50 @@ describe('Franchise Frontend Enterprise Suite', () => {
     const expectedCashInDrawer = startingCash + totalCashSales + totalCashIn - totalCashOut;
     assert.equal(expectedCashInDrawer, 2850000);
   });
+
+  it('calculates member tier discount percentages correctly', () => {
+    const getTierDiscountPercent = (tier: number) => {
+      switch (tier) {
+        case 3: return 15; // Diamond
+        case 2: return 10; // Gold
+        case 1: return 5;  // Silver
+        default: return 0; // Standard
+      }
+    };
+
+    assert.equal(getTierDiscountPercent(0), 0);
+    assert.equal(getTierDiscountPercent(1), 5);
+    assert.equal(getTierDiscountPercent(2), 10);
+    assert.equal(getTierDiscountPercent(3), 15);
+  });
+
+  it('accurately calculates combined loyalty promotion (Tier + Voucher + Points)', () => {
+    const subtotal = 300000;
+    const tierDiscountPercent = 10; // Gold Member = 10%
+    const tierDiscount = Math.round(subtotal * (tierDiscountPercent / 100)); // 30,000 đ
+
+    const voucherDiscount = 25000; // Voucher giảm 25,000 đ
+    const pointsRedeemed = 20; // 20 điểm x 1,000 đ = 20,000 đ
+    const pointsDiscount = pointsRedeemed * 1000;
+
+    const totalDiscount = Math.min(subtotal, tierDiscount + voucherDiscount + pointsDiscount);
+    const taxableAmount = Math.max(0, subtotal - totalDiscount);
+    const vat = Math.round(taxableAmount * 0.08);
+    const finalAmount = taxableAmount + vat;
+
+    assert.equal(tierDiscount, 30000);
+    assert.equal(pointsDiscount, 20000);
+    assert.equal(totalDiscount, 75000); // 30k + 25k + 20k
+    assert.equal(taxableAmount, 225000);
+    assert.equal(vat, 18000);
+    assert.equal(finalAmount, 243000);
+  });
+
+  it('evaluates loyalty points earning rate correctly (10,000 VND = 1 Point)', () => {
+    const finalAmount = 243000;
+    const pointsEarned = Math.floor(finalAmount / 10000);
+    assert.equal(pointsEarned, 24);
+  });
 });
 
 

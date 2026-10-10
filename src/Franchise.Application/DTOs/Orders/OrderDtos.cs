@@ -9,7 +9,10 @@ public record CheckoutOrderRequest(
     Guid? CashierId,
     OrderType OrderType,
     PaymentMethod PaymentMethod,
-    List<CreateOrderItemRequest> Items
+    List<CreateOrderItemRequest> Items,
+    string? CustomerPhoneNumber = null,
+    string? VoucherCode = null,
+    int PointsToRedeem = 0
 );
 
 public record CreateOrderItemRequest(

@@ -110,7 +110,8 @@ import { FranchiseContractModal } from "./components/FranchiseContractModal.tsx"
 import { SignaturePad } from "./components/SignaturePad.tsx";
 import { reportsService } from "./services/reports.ts";
 import { ShiftModal, type ShiftModalMode } from "./components/ShiftModal.tsx";
-import type { ShiftData } from "./services/api.ts";
+import { LoyaltyModal } from "./components/LoyaltyModal.tsx";
+import type { ShiftData, CustomerData, ApplyPromotionResponse } from "./services/api.ts";
 
 type Modal = "store" | "restock" | "modifier" | "receipt" | "login" | null;
 type Payment = "Cash" | "QR Transfer" | "Credit Card";
@@ -2051,6 +2052,13 @@ function PosScreen({
   const [currentShift, setCurrentShift] = useState<ShiftData | null>(null);
   const [shiftModalMode, setShiftModalMode] = useState<ShiftModalMode | null>(null);
 
+  // Loyalty & Promotion State
+  const [showLoyaltyModal, setShowLoyaltyModal] = useState<boolean>(false);
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState<CustomerData | null>(null);
+  const [appliedVoucherCode, setAppliedVoucherCode] = useState<string>("");
+  const [redeemedPoints, setRedeemedPoints] = useState<number>(0);
+  const [promotionSummary, setPromotionSummary] = useState<ApplyPromotionResponse | null>(null);
+
   const effectiveStoreId = currentUser?.storeId || "22222222-2222-2222-2222-222222222222";
   const [storeDisplayName, setStoreDisplayName] = useState<string>("Chi nhánh Quận 1 (Flagship Store)");
 
@@ -2112,8 +2120,10 @@ function PosScreen({
 
   const filtered = category === "All" ? productList : productList.filter((product) => product.category === category);
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity + item.toppings.length * 10000, 0);
-  const vat = Math.round(subtotal * 0.08);
-  const total = subtotal + vat;
+  const discount = promotionSummary ? Math.min(subtotal, promotionSummary.totalDiscountAmount) : 0;
+  const taxableAmount = Math.max(0, subtotal - discount);
+  const vat = Math.round(taxableAmount * 0.08);
+  const total = taxableAmount + vat;
 
   const currentOrderCode = useMemo(
     () => `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${ticketSeq}`,
@@ -2232,6 +2242,10 @@ function PosScreen({
       const payload: CheckoutOrderPayload = {
         storeId: effectiveStoreId,
         cashierId: currentUser?.id,
+        customerId: loyaltyCustomer?.id,
+        customerPhoneNumber: loyaltyCustomer?.phoneNumber,
+        voucherCode: appliedVoucherCode || undefined,
+        pointsToRedeem: redeemedPoints,
         orderType: mappedOrderType,
         paymentMethod: mappedPaymentMethod,
         items: cart.map((item) => ({
@@ -2521,18 +2535,57 @@ function PosScreen({
           )}
         </div>
         <div className="border-t border-slate-200 bg-white p-4">
+          {/* Loyalty & Member Button */}
+          <div className="mb-3">
+            {!loyaltyCustomer ? (
+              <button
+                type="button"
+                onClick={() => setShowLoyaltyModal(true)}
+                className="flex w-full items-center justify-between rounded-xl border border-dashed border-amber-300 bg-amber-50/70 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100/70 transition"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-600" /> Nhập SĐT Tích Điểm / Voucher
+                </span>
+                <span className="rounded bg-amber-200/80 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-950">+ Thêm</span>
+              </button>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-black text-amber-950">{loyaltyCustomer.fullName}</span>
+                    <span className="rounded-full bg-amber-200 px-1.5 py-0.2 text-[9px] font-black text-amber-900">
+                      {loyaltyCustomer.memberTier === 3 ? "Diamond" : loyaltyCustomer.memberTier === 2 ? "Gold" : loyaltyCustomer.memberTier === 1 ? "Silver" : "Standard"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-amber-800">
+                    SĐT: {loyaltyCustomer.phoneNumber} · {loyaltyCustomer.loyaltyPoints} điểm
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLoyaltyModal(true)}
+                  className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-black text-amber-800 hover:bg-amber-100 transition shadow-2xs"
+                >
+                  Đổi ưu đãi
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-2 text-xs">
             <div className="flex justify-between text-slate-500">
               <span>Subtotal</span>
               <span className="font-mono font-bold text-slate-800">{subtotal.toLocaleString("vi-VN")} đ</span>
             </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-emerald-700 font-bold">
+                <span>Ưu đãi (Hạng thẻ/Voucher/Điểm)</span>
+                <span className="font-mono">- {discount.toLocaleString("vi-VN")} đ</span>
+              </div>
+            )}
             <div className="flex justify-between text-slate-500">
               <span>VAT (8%)</span>
               <span className="font-mono font-bold text-slate-800">{vat.toLocaleString("vi-VN")} đ</span>
-            </div>
-            <div className="flex justify-between text-emerald-700">
-              <span>Discount</span>
-              <span className="font-mono font-bold">0 đ</span>
             </div>
           </div>
           <div className="my-4 flex items-end justify-between border-t border-dashed border-slate-200 pt-4">
@@ -2643,6 +2696,22 @@ function PosScreen({
           onClose={() => setShiftModalMode(null)}
           onShiftUpdated={async () => {
             await fetchActiveShift();
+          }}
+        />
+      )}
+
+      {showLoyaltyModal && (
+        <LoyaltyModal
+          subtotal={subtotal}
+          initialCustomer={loyaltyCustomer}
+          initialVoucherCode={appliedVoucherCode}
+          initialPointsRedeemed={redeemedPoints}
+          onClose={() => setShowLoyaltyModal(false)}
+          onApply={({ customer, voucherCode, pointsRedeemed, promotionSummary: promo }) => {
+            setLoyaltyCustomer(customer);
+            setAppliedVoucherCode(voucherCode || "");
+            setRedeemedPoints(pointsRedeemed);
+            setPromotionSummary(promo);
           }}
         />
       )}

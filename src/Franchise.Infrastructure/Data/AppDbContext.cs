@@ -34,6 +34,8 @@ public class AppDbContext : DbContext
 
     // 4. Phân hệ Khách hàng & Đơn hàng
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Voucher> Vouchers => Set<Voucher>();
+    public DbSet<LoyaltyTransaction> LoyaltyTransactions => Set<LoyaltyTransaction>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<OrderItemModifier> OrderItemModifiers => Set<OrderItemModifier>();
@@ -247,7 +249,38 @@ public class AppDbContext : DbContext
             b.HasIndex(e => e.PhoneNumber).IsUnique();
             b.Property(e => e.PhoneNumber).IsRequired().HasMaxLength(20);
             b.Property(e => e.FullName).IsRequired().HasMaxLength(100);
+            b.Property(e => e.Email).HasMaxLength(150);
+            b.Property(e => e.TotalSpent).HasPrecision(18, 2);
             b.Property(e => e.MemberTier).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<Voucher>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.HasIndex(e => e.Code).IsUnique();
+            b.Property(e => e.Code).IsRequired().HasMaxLength(50);
+            b.Property(e => e.Title).IsRequired().HasMaxLength(150);
+            b.Property(e => e.DiscountType).HasConversion<string>().HasMaxLength(20);
+            b.Property(e => e.DiscountValue).HasPrecision(18, 2);
+            b.Property(e => e.MinOrderAmount).HasPrecision(18, 2);
+            b.Property(e => e.MaxDiscountAmount).HasPrecision(18, 2);
+            b.Property(e => e.MinMemberTier).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<LoyaltyTransaction>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Reason).IsRequired().HasMaxLength(250);
+
+            b.HasOne(e => e.Customer)
+                .WithMany(c => c.LoyaltyTransactions)
+                .HasForeignKey(e => e.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.Order)
+                .WithMany()
+                .HasForeignKey(e => e.OrderId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Order>(b =>
@@ -271,6 +304,11 @@ public class AppDbContext : DbContext
             b.HasOne(e => e.Customer)
                 .WithMany(c => c.Orders)
                 .HasForeignKey(e => e.CustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(e => e.Voucher)
+                .WithMany()
+                .HasForeignKey(e => e.VoucherId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             b.HasOne(e => e.Cashier)

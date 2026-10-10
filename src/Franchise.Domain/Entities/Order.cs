@@ -26,6 +26,11 @@ public class Order : BaseEntity
     public decimal VatAmount { get; set; }
     public decimal FinalAmount { get; set; }
 
+    public Guid? VoucherId { get; set; }
+    public Voucher? Voucher { get; set; }
+    public int PointsRedeemed { get; set; } = 0;
+    public int PointsEarned { get; set; } = 0;
+
     public DateTime? CompletedAt { get; set; }
 
     // Navigation

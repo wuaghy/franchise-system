@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 import { API_BASE } from "../config/api.ts";
 import { audioNotifier } from "../services/audioNotification.ts";
-import { api, type CheckoutOrderPayload } from "../services/api.ts";
+import { api, type CheckoutOrderPayload, type CustomerData, type ApplyPromotionResponse } from "../services/api.ts";
+import { LoyaltyModal } from "./LoyaltyModal.tsx";
 
 const DB_PRODUCT_MAPPING: Record<string, string> = {
   "cf-01": "09ffff04-0f0b-4200-994a-d7decc20d2cc", // Phin Sữa Đá Đậm Đà
@@ -305,6 +306,13 @@ export function CustomerScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrderNumber, setSuccessOrderNumber] = useState<string | null>(null);
 
+  // Loyalty & Promotions State
+  const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState<CustomerData | null>(null);
+  const [appliedVoucherCode, setAppliedVoucherCode] = useState<string>("");
+  const [redeemedPoints, setRedeemedPoints] = useState<number>(0);
+  const [promotionSummary, setPromotionSummary] = useState<ApplyPromotionResponse | null>(null);
+
   // Customization Modal State
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [customState, setCustomState] = useState<CustomizationState>({
@@ -375,7 +383,9 @@ export function CustomerScreen() {
   const filteredMenu =
     selectedCategory === "all" ? menuData : menuData.filter((i) => i.category === selectedCategory);
 
-  const totalAmount = cart.reduce((sum, c) => sum + c.finalPricePerUnit * c.quantity, 0);
+  const subtotal = cart.reduce((sum, c) => sum + c.finalPricePerUnit * c.quantity, 0);
+  const discountAmount = promotionSummary ? Math.min(subtotal, promotionSummary.totalDiscountAmount) : 0;
+  const totalAmount = Math.max(0, subtotal - discountAmount);
 
   // Open customization modal
   const handleStartAdd = (item: MenuItem) => {
@@ -482,6 +492,10 @@ export function CustomerScreen() {
       try {
         const checkoutPayload: CheckoutOrderPayload = {
           storeId: selectedStoreId,
+          customerId: loyaltyCustomer?.id,
+          customerPhoneNumber: loyaltyCustomer?.phoneNumber,
+          voucherCode: appliedVoucherCode || undefined,
+          pointsToRedeem: redeemedPoints,
           orderType: orderType === "dine-in" ? 0 : 1,
           paymentMethod: 2, // VietQR Napas
           items: cart.map((c) => ({
@@ -788,10 +802,53 @@ export function CustomerScreen() {
             {/* Summary & Checkout CTA */}
             {cart.length > 0 && (
               <div className="mt-4 border-t border-slate-100 pt-3">
+                {/* Loyalty & Member Button */}
+                <div className="mb-3">
+                  {!loyaltyCustomer ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowLoyaltyModal(true)}
+                      className="flex w-full items-center justify-between rounded-xl border border-dashed border-amber-300 bg-amber-50/70 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100/70 transition"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-amber-600" /> Nhập SĐT Tích Điểm / Voucher
+                      </span>
+                      <span className="rounded bg-amber-200/80 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-950">+ Thêm</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-amber-950">{loyaltyCustomer.fullName}</span>
+                          <span className="rounded-full bg-amber-200 px-1.5 py-0.2 text-[9px] font-black text-amber-900">
+                            {loyaltyCustomer.memberTier === 3 ? "Diamond" : loyaltyCustomer.memberTier === 2 ? "Gold" : loyaltyCustomer.memberTier === 1 ? "Silver" : "Standard"}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-amber-800">
+                          SĐT: {loyaltyCustomer.phoneNumber} · {loyaltyCustomer.loyaltyPoints} điểm
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowLoyaltyModal(true)}
+                        className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-black text-amber-800 hover:bg-amber-100 transition shadow-2xs"
+                      >
+                        Đổi ưu đãi
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
                   <span>Tạm tính</span>
-                  <span className="font-bold text-slate-800">{totalAmount.toLocaleString("vi-VN")} đ</span>
+                  <span className="font-bold text-slate-800">{subtotal.toLocaleString("vi-VN")} đ</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex items-center justify-between text-xs text-emerald-700 font-bold mb-1">
+                    <span>Ưu đãi (Hạng thẻ/Voucher/Điểm)</span>
+                    <span className="font-mono">- {discountAmount.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
                   <span>VAT (8%) & Phí dịch vụ</span>
                   <span className="text-emerald-700 font-bold">Đã bao gồm</span>
@@ -1117,6 +1174,22 @@ export function CustomerScreen() {
           </div>
         )}
       </AnimatePresence>
+
+      {showLoyaltyModal && (
+        <LoyaltyModal
+          subtotal={subtotal}
+          initialCustomer={loyaltyCustomer}
+          initialVoucherCode={appliedVoucherCode}
+          initialPointsRedeemed={redeemedPoints}
+          onClose={() => setShowLoyaltyModal(false)}
+          onApply={({ customer, voucherCode, pointsRedeemed, promotionSummary: promo }) => {
+            setLoyaltyCustomer(customer);
+            setAppliedVoucherCode(voucherCode || "");
+            setRedeemedPoints(pointsRedeemed);
+            setPromotionSummary(promo);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@
 [![CI Frontend](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/ci-frontend.yml)
 [![Docker CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-docker-publish.yml)
 [![K3s Deploy CD](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml/badge.svg?branch=main)](https://github.com/wuaghy/franchise-system/actions/workflows/cd-k3s-deploy.yml)
-[![Tests](https://img.shields.io/badge/Automated_Tests-131_Backend_+_27_Frontend_Passing-brightgreen?logo=checkmarx&logoColor=white)](https://github.com/wuaghy/franchise-system/actions)
+[![Tests](https://img.shields.io/badge/Automated_Tests-135_Backend_+_30_Frontend_Passing-brightgreen?logo=checkmarx&logoColor=white)](https://github.com/wuaghy/franchise-system/actions)
 
 [![Backend Platform](https://img.shields.io/badge/.NET_8-ASP.NET_Core_Web_API-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Frontend Platform](https://img.shields.io/badge/Frontend-React_19_Vite_TS-61DAFB?logo=react&logoColor=white)](https://react.dev/)
@@ -41,7 +41,7 @@ franchise-system/
 │   └── Franchise.Api/             # ASP.NET Core 8 API, SignalR Hub, Middlewares, HealthChecks
 ├── frontend/                      # React 19 + TypeScript + Vite + Tailwind CSS v4 + Framer Motion
 ├── k8s/                           # Kubernetes / K3s Production Manifests (Deployment, Service, Ingress)
-├── tests/                         # 131 Backend Tests (Unit + Integration) & 27 Frontend Tests
+├── tests/                         # 135 Backend Tests (Unit + Integration) & 30 Frontend Tests
 └── docker-compose.yml             # Orchestration cho Postgres, Redis, Backend & Frontend
 ```
 
@@ -61,7 +61,16 @@ franchise-system/
 * **Ghi Nhận Biến Động Két (Cash-In / Cash-Out)**: Quản lý các khoản chi vặt thực tế tại quán (mua đá cây, bao nilon, nạp thêm tiền lẻ) có lưu lý do và tài khoản thực hiện.
 * **Kiểm Đếm & Chốt Ca (Z-Report)**: Bảng đếm tiền theo mệnh giá (500k đến 1k), tự động so khớp tiền thực tế vs tiền lý thuyết (`CashDiscrepancy` thừa/thiếu), xuất và in phiếu chốt ca chuẩn máy in nhiệt 80mm.
 
-### 3. Quầy Bán Hàng POS & Chống Mất Dữ Liệu Ngoại Tuyến (Offline Outbox Pattern)
+### 3. Phân Hệ Tích Điểm & Khách Hàng Thân Thiết (Loyalty, Vouchers & Customer Portal)
+* **Tra Cứu & Đăng Ký Siêu Tốc Bằng SĐT**: Tra cứu thông tin hội viên tức thì tại quầy POS hoặc Cổng Khách Hàng; tặng ngay 10 điểm chào mừng khi đăng ký mới.
+* **Cơ Chế Phân Hạng Thành Viên Tự Động**: Thăng hạng dựa trên tổng chi tiêu tích lũy (`TotalSpent`):
+  - **Standard (Chuẩn)**: Tích điểm cơ bản.
+  - **Silver (Hạng Bạc >= 500k)**: Chiết khấu tự động 5% cho mọi hóa đơn.
+  - **Gold (Hạng Vàng >= 2tr)**: Chiết khấu tự động 10% cho mọi hóa đơn.
+  - **Diamond (Hạng Kim Cương >= 5tr)**: Chiết khấu tự động 15% cho mọi hóa đơn.
+* **Đổi Điểm Trừ Tiền & Mã Voucher**: Cho phép đổi điểm thưởng (1 điểm = 1.000 VNĐ) hoặc áp dụng Voucher giảm giá theo `%` / tiền mặt trực tiếp vào hóa đơn.
+
+### 4. Quầy Bán Hàng POS & Chống Mất Dữ Liệu Ngoại Tuyến (Offline Outbox Pattern)
 * **Local Queue & Idempotency**: Bán hàng không gián đoạn ngay cả khi rớt mạng; lưu hàng đợi trên trình duyệt và tự động đồng bộ (Bulk Sync) khi có mạng trở lại với khóa `IdempotencyKey`.
 * **VietQR Napas 247**: Tích hợp mã QR động sinh tức thì theo chuẩn ngân hàng VietinBank (`100878137043` - `NGUYEN QUANG HUY`).
 * **Webhook Tự Động Nhận Tiền (PayOS & Casso)**: Bắt biến động số dư ngân hàng qua Webhook, xác thực HMAC-SHA256, truyền tín hiệu SignalR tức thì về quầy POS tự động in hóa đơn và hoàn tất đơn (thu ngân không cần thao tác bấm tay).

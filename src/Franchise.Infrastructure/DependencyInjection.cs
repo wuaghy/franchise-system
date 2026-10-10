@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<Franchise.Application.Common.Interfaces.IVietQrService, Services.VietQrService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IPaymentWebhookService, Services.PaymentWebhookService>();
         services.AddScoped<Franchise.Application.Common.Interfaces.IShiftService, Services.ShiftService>();
+        services.AddScoped<Franchise.Application.Common.Interfaces.ILoyaltyService, Services.LoyaltyService>();
         services.AddHostedService<BackgroundJobs.OutboxProcessorBackgroundService>();
 
         return services;
